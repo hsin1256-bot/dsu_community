@@ -10,6 +10,29 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+// DB(snake_case) <-> 앱(camelCase) 변환
+type MealReviewRow = {
+  id: string;
+  menu_id: string;
+  restaurant: MealReview['restaurant'];
+  date: string;
+  student_email_masked: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+};
+
+const fromRow = (r: MealReviewRow): MealReview => ({
+  id: r.id,
+  menuId: r.menu_id,
+  restaurant: r.restaurant,
+  date: r.date,
+  studentEmailMasked: r.student_email_masked,
+  rating: r.rating,
+  comment: r.comment,
+  createdAt: r.created_at,
+});
+
 // 로컬 인메모리 리뷰 저장소 (Supabase 키가 설정되지 않았을 때 폴백)
 let localReviews: MealReview[] = [
   {
@@ -52,7 +75,7 @@ export async function getMealReviews(menuId?: string, restaurant?: string): Prom
       if (restaurant) query = query.eq('restaurant', restaurant);
       const { data, error } = await query;
       if (!error && data) {
-        return data as MealReview[];
+        return (data as MealReviewRow[]).map(fromRow);
       }
     } catch (e) {
       console.warn('Supabase fetch failed, using local reviews', e);
@@ -77,11 +100,18 @@ export async function addMealReview(review: Omit<MealReview, 'id' | 'createdAt'>
     try {
       const { data, error } = await supabase
         .from('meal_reviews')
-        .insert([newReview])
+        .insert([{
+          menu_id: review.menuId,
+          restaurant: review.restaurant,
+          date: review.date,
+          student_email_masked: review.studentEmailMasked,
+          rating: review.rating,
+          comment: review.comment,
+        }])
         .select()
         .single();
       if (!error && data) {
-        return data as MealReview;
+        return fromRow(data as MealReviewRow);
       }
     } catch (e) {
       console.warn('Supabase insert failed, storing locally', e);
