@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { Notice, NoticeCategory, CafeteriaMenu, AcademicSchedule, RestaurantType } from '@/types';
+import { INITIAL_CAFETERIA_MENUS } from '@/lib/cafeteria-seed';
 
 // 동서대학교 공식 도메인 및 게시판 pCode 매핑
 const DSU_BASE_URL = 'https://www.dongseo.ac.kr';
@@ -85,81 +86,8 @@ export const MOCK_NOTICES: Notice[] = [
   }
 ];
 
-// 학식 목업 데이터 (학생식당, 교직원식당, 기숙사식당)
-export const MOCK_CAFETERIA: CafeteriaMenu[] = [
-  {
-    id: 'caf-1',
-    date: '2026-09-27',
-    restaurant: '학생식당',
-    mealType: '중식',
-    cornerName: '일품코너',
-    menuItems: ['수제 돈까스 & 브라운소스', '미니 우동', '양배추 샐러드', '단무지 & 깍두기', '요구르트'],
-    price: '5,500원',
-    calories: '890 kcal',
-    rating: 4.6,
-    reviewCount: 28,
-  },
-  {
-    id: 'caf-2',
-    date: '2026-09-27',
-    restaurant: '학생식당',
-    mealType: '중식',
-    cornerName: '찌개 & 백반코너',
-    menuItems: ['돼지고기 김치찌개', '계란말이 & 케첩', '어묵볶음', '잡곡밥 / 쌀밥', '총각김치'],
-    price: '5,000원',
-    calories: '750 kcal',
-    rating: 4.3,
-    reviewCount: 19,
-  },
-  {
-    id: 'caf-3',
-    date: '2026-09-27',
-    restaurant: '학생식당',
-    mealType: '석식',
-    cornerName: '석식 정식',
-    menuItems: ['매콤 제육덮밥', '유부 된장국', '감자채 볶음', '배추김치', '과일 젤리'],
-    price: '5,000원',
-    calories: '780 kcal',
-    rating: 4.4,
-    reviewCount: 14,
-  },
-  {
-    id: 'caf-4',
-    date: '2026-09-27',
-    restaurant: '교직원식당',
-    mealType: '중식',
-    cornerName: '교직원 웰빙 뷔페',
-    menuItems: ['소고기 버섯전골', '고등어 무조림', '단호박 샐러드', '시금치 나물', '현미밥 / 백미밥', '포기김치', '수정과'],
-    price: '7,000원',
-    calories: '820 kcal',
-    rating: 4.7,
-    reviewCount: 12,
-  },
-  {
-    id: 'caf-5',
-    date: '2026-09-27',
-    restaurant: '기숙사식당',
-    mealType: '조식',
-    cornerName: '기숙사 조식',
-    menuItems: ['토스트 & 딸기잼', '스크램블 에그', '소시지 구이', '양송이 스프', '시리얼 & 우유 / 주스'],
-    price: '4,500원',
-    calories: '620 kcal',
-    rating: 4.1,
-    reviewCount: 9,
-  },
-  {
-    id: 'caf-6',
-    date: '2026-09-27',
-    restaurant: '기숙사식당',
-    mealType: '석식',
-    cornerName: '기숙사 석식',
-    menuItems: ['치킨마요 덮밥', '맑은 콩나물국', '떡볶이', '깍두기', '바나나'],
-    price: '5,000원',
-    calories: '810 kcal',
-    rating: 4.5,
-    reviewCount: 22,
-  }
-];
+// 학식 기본 시드 데이터 (글빌 식당, 스플 식당, 경영 식당)
+export const MOCK_CAFETERIA: CafeteriaMenu[] = INITIAL_CAFETERIA_MENUS;
 
 // 학사일정 목업 데이터
 export const MOCK_SCHEDULE: AcademicSchedule[] = [

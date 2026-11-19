@@ -1,25 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MOCK_CAFETERIA } from '@/lib/dongseo-crawler';
-import { RestaurantType } from '@/types';
+import { getCafeteriaMenus } from '@/lib/supabase';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const restaurant = searchParams.get('restaurant') as RestaurantType | null;
-  const date = searchParams.get('date');
+  const restaurant = searchParams.get('restaurant') || undefined;
+  const category = searchParams.get('category') || undefined;
 
-  let list = [...MOCK_CAFETERIA];
+  try {
+    const list = await getCafeteriaMenus(restaurant, category);
 
-  if (restaurant) {
-    list = list.filter(m => m.restaurant === restaurant);
+    // 해당 식당에 존재하는 카테고리 목록(순서 유지)
+    const allForRestaurant = category && category !== '전체'
+      ? await getCafeteriaMenus(restaurant)
+      : list;
+    const categories = Array.from(new Set(allForRestaurant.map((m) => m.category)));
+
+    return NextResponse.json({
+      success: true,
+      data: list,
+      categories,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: '메뉴 정보를 불러올 수 없습니다.' },
+      { status: 500 }
+    );
   }
-
-  if (date) {
-    list = list.filter(m => m.date === date);
-  }
-
-  return NextResponse.json({
-    success: true,
-    data: list,
-    date: date || '2026-09-27'
-  });
 }

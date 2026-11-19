@@ -19,7 +19,7 @@ import {
 export default function HomePage() {
   const recentNotices = MOCK_NOTICES.slice(0, 4);
   const todaysLunch = MOCK_CAFETERIA.find(
-    (m) => m.restaurant === '학생식당' && m.mealType === '중식'
+    (m) => m.restaurant === '글빌 식당'
   ) || MOCK_CAFETERIA[0];
   const upcomingSchedules = MOCK_SCHEDULE.filter((s) => s.isImportant).slice(0, 2);
 
@@ -127,7 +127,7 @@ export default function HomePage() {
                   <Utensils className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">오늘의 학생식당 중식</h3>
+                  <h3 className="text-sm font-bold text-slate-900">오늘의 글빌 식당 식단표</h3>
                   <p className="text-[11px] text-slate-400">{todaysLunch.cornerName}</p>
                 </div>
               </div>
@@ -141,7 +141,10 @@ export default function HomePage() {
 
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
               <p className="text-sm font-semibold text-slate-800">
-                {todaysLunch.menuItems.join(' · ')}
+                {(todaysLunch.menuItems && todaysLunch.menuItems.length > 0
+                  ? todaysLunch.menuItems
+                  : [todaysLunch.name]
+                ).join(' · ')}
               </p>
               <div className="flex items-center justify-between text-xs text-slate-500 mt-2 pt-2 border-t border-slate-200/60">
                 <span className="font-bold text-dongseo-700">{todaysLunch.price}</span>
