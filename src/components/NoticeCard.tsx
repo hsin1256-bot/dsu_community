@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Notice, NoticeCategory } from '@/types';
-import { Bookmark, Eye, Paperclip, Pin } from 'lucide-react';
+import { Bookmark, Eye, Paperclip, Pin, Bell, Calendar } from 'lucide-react';
 import { isNoticeBookmarked, toggleNoticeBookmark } from '@/lib/bookmarks';
+import { checkNoticeKeywordMatch, getKeywordAlerts } from '@/lib/keyword-alerts';
 
 const CATEGORY_STYLES: Record<NoticeCategory, { bg: string; text: string; border: string }> = {
   '전체': { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
@@ -15,15 +16,42 @@ const CATEGORY_STYLES: Record<NoticeCategory, { bg: string; text: string; border
   '행사': { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
 };
 
+function calculateDDay(deadlineStr?: string): { text: string; isImminent: boolean } | null {
+  if (!deadlineStr) return null;
+  const target = new Date(deadlineStr);
+  if (isNaN(target.getTime())) return null;
+
+  const now = new Date();
+  const diffTime = target.getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return { text: '마감됨', isImminent: false };
+  if (diffDays === 0) return { text: 'D-Day', isImminent: true };
+  return { text: `D-${diffDays}`, isImminent: diffDays <= 3 };
+}
+
 export default function NoticeCard({ notice }: { notice: Notice }) {
   const [bookmarked, setBookmarked] = useState(false);
+  const [matchedKeywords, setMatchedKeywords] = useState<string[]>([]);
 
   useEffect(() => {
     setBookmarked(isNoticeBookmarked(notice.id));
-    const handleUpdate = () => setBookmarked(isNoticeBookmarked(notice.id));
-    window.addEventListener('dsu_bookmarks_updated', handleUpdate);
-    return () => window.removeEventListener('dsu_bookmarks_updated', handleUpdate);
-  }, [notice.id]);
+    const handleBookmarkUpdate = () => setBookmarked(isNoticeBookmarked(notice.id));
+    window.addEventListener('dsu_bookmarks_updated', handleBookmarkUpdate);
+
+    // 키워드 알림 매칭 확인
+    const checkKeywords = () => {
+      const matchResult = checkNoticeKeywordMatch(notice, getKeywordAlerts());
+      setMatchedKeywords(matchResult.matchedKeywords);
+    };
+    checkKeywords();
+    window.addEventListener('dsu_keywords_updated', checkKeywords);
+
+    return () => {
+      window.removeEventListener('dsu_bookmarks_updated', handleBookmarkUpdate);
+      window.removeEventListener('dsu_keywords_updated', checkKeywords);
+    };
+  }, [notice]);
 
   const handleBookmarkClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -33,6 +61,7 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
   };
 
   const style = CATEGORY_STYLES[notice.category] || CATEGORY_STYLES['일반'];
+  const dDay = calculateDDay(notice.aiDeadline);
 
   return (
     <Link
@@ -50,7 +79,29 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
           <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${style.bg} ${style.text} ${style.border}`}>
             {notice.category}
           </span>
-          <span className="text-xs text-slate-400">{notice.author}</span>
+
+          {/* D-Day 뱃지 */}
+          {dDay && (
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                dDay.isImminent
+                  ? 'bg-rose-500 text-white animate-pulse'
+                  : 'bg-slate-800 text-white'
+              }`}
+            >
+              <Calendar className="w-2.5 h-2.5" />
+              {dDay.text}
+            </span>
+          )}
+
+          {/* 키워드 알림 매칭 뱃지 */}
+          {matchedKeywords.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300">
+              <Bell className="w-2.5 h-2.5 text-amber-600 fill-amber-500" />
+              {matchedKeywords[0]}
+            </span>
+          )}
+
         </div>
 
         <button
@@ -69,6 +120,7 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
       <h3 className="font-semibold text-slate-900 mt-2 text-sm leading-snug line-clamp-2 hover:text-dongseo-700 transition-colors">
         {notice.title}
       </h3>
+
 
       <div className="flex items-center justify-between text-xs text-slate-400 mt-3 pt-2 border-t border-slate-50">
         <span className="text-slate-500 font-medium">{notice.date}</span>

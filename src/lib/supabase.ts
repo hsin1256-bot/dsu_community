@@ -1,37 +1,173 @@
 import { createClient } from '@supabase/supabase-js';
-import { MealReview } from '@/types';
+import { MealReview, Notice, NoticeCategory } from '@/types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl && 
+  supabaseAnonKey && 
+  supabaseUrl !== 'your_supabase_project_url' &&
+  !supabaseUrl.includes('example.com')
+);
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-// DB(snake_case) <-> 앱(camelCase) 변환
-type MealReviewRow = {
-  id: string;
-  menu_id: string;
-  restaurant: MealReview['restaurant'];
-  date: string;
-  student_email_masked: string;
-  rating: number;
-  comment: string;
-  created_at: string;
-};
+// 로컬 인메모리 공지사항 저장소 (Supabase 미설정 시 폴백)
+let localNoticesCache: Notice[] = [];
 
-const fromRow = (r: MealReviewRow): MealReview => ({
-  id: r.id,
-  menuId: r.menu_id,
-  restaurant: r.restaurant,
-  date: r.date,
-  studentEmailMasked: r.student_email_masked,
-  rating: r.rating,
-  comment: r.comment,
-  createdAt: r.created_at,
-});
+// DB 레코드 -> Notice 객체 매퍼
+function mapRowToNotice(row: any): Notice {
+  return {
+    id: String(row.id),
+    title: row.title,
+    rawTitle: row.raw_title,
+    category: row.category as NoticeCategory,
+    author: row.author || '동서대학교',
+    date: row.date,
+    views: Number(row.views) || 0,
+    url: row.url,
+    contentHtml: row.content_html || row.contentHtml,
+    contentText: row.content_text || row.contentText,
+    aiSummary: row.ai_summary || row.aiSummary || [],
+    aiDeadline: row.ai_deadline || row.aiDeadline,
+    aiKeywords: row.ai_keywords || row.aiKeywords || [],
+    attachments: row.attachments || [],
+    isPinned: Boolean(row.is_pinned ?? row.isPinned),
+    source: row.source || 'homepage',
+  };
+}
+
+// Notice 객체 -> DB 컬럼 레코드 매퍼
+function mapNoticeToRow(notice: Partial<Notice>): any {
+  return {
+    id: notice.id,
+    title: notice.title,
+    category: notice.category,
+    author: notice.author,
+    date: notice.date,
+    views: notice.views || 0,
+    url: notice.url,
+    content_html: notice.contentHtml,
+    content_text: notice.contentText,
+    ai_summary: notice.aiSummary || [],
+    ai_deadline: notice.aiDeadline || null,
+    ai_keywords: notice.aiKeywords || [],
+    attachments: notice.attachments || [],
+    is_pinned: notice.isPinned ?? false,
+    source: notice.source || 'homepage',
+  };
+}
+
+// 1. 공지사항 목록 조회 (Supabase 1순위 -> 로컬 캐시 2순위)
+export async function getNoticesFromDB(category?: NoticeCategory, query?: string): Promise<Notice[] | null> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      let qb = supabase
+        .from('notices')
+        .select('*')
+        .order('date', { ascending: false })
+        .order('id', { ascending: false });
+
+      if (category && category !== '전체') {
+        qb = qb.eq('category', category);
+      }
+
+      if (query && query.trim()) {
+        qb = qb.ilike('title', `%${query.trim()}%`);
+      }
+
+      const { data, error } = await qb;
+      if (!error && data) {
+        return data.map(mapRowToNotice);
+      }
+      if (error) {
+        console.warn('[Supabase getNotices error]', error.message);
+      }
+    } catch (e) {
+      console.warn('[Supabase getNotices exception]', e);
+    }
+  }
+
+  // Supabase에 데이터가 없거나 미설정 시 로컬 캐시 확인
+  if (localNoticesCache.length > 0) {
+    let filtered = [...localNoticesCache];
+    filtered.sort((a, b) => {
+      if (b.date !== a.date) return b.date.localeCompare(a.date);
+      return Number(b.id) - Number(a.id);
+    });
+    if (category && category !== '전체') {
+      filtered = filtered.filter(n => n.category === category);
+    }
+    if (query && query.trim()) {
+      const qLower = query.toLowerCase();
+      filtered = filtered.filter(n => n.title.toLowerCase().includes(qLower));
+    }
+    return filtered;
+  }
+
+  return null;
+}
+
+// 2. 공지사항 상세 조회
+export async function getNoticeDetailFromDB(id: string): Promise<Notice | null> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('notices')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (!error && data) {
+        return mapRowToNotice(data);
+      }
+    } catch (e) {
+      console.warn('[Supabase getNoticeDetail error]', e);
+    }
+  }
+
+  const foundLocal = localNoticesCache.find(n => n.id === id);
+  return foundLocal || null;
+}
+
+// 3. 공지사항 일괄 Upsert 저장
+export async function upsertNoticesToDB(notices: Partial<Notice>[]): Promise<number> {
+  if (!notices.length) return 0;
+
+  // 로컬 캐시 갱신
+  for (const n of notices) {
+    const existingIdx = localNoticesCache.findIndex(item => item.id === n.id);
+    if (existingIdx >= 0) {
+      localNoticesCache[existingIdx] = { ...localNoticesCache[existingIdx], ...n } as Notice;
+    } else {
+      localNoticesCache.unshift(n as Notice);
+    }
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const rows = notices.map(mapNoticeToRow);
+      const { data, error } = await supabase
+        .from('notices')
+        .upsert(rows, { onConflict: 'id' })
+        .select('id');
+
+      if (!error && data) {
+        return data.length;
+      }
+      if (error) {
+        console.error('[Supabase upsert error]', error);
+      }
+    } catch (e) {
+      console.warn('[Supabase upsert exception]', e);
+    }
+  }
+
+  return notices.length;
+}
 
 // 로컬 인메모리 리뷰 저장소 (Supabase 키가 설정되지 않았을 때 폴백)
 let localReviews: MealReview[] = [
@@ -75,7 +211,7 @@ export async function getMealReviews(menuId?: string, restaurant?: string): Prom
       if (restaurant) query = query.eq('restaurant', restaurant);
       const { data, error } = await query;
       if (!error && data) {
-        return (data as MealReviewRow[]).map(fromRow);
+        return data as MealReview[];
       }
     } catch (e) {
       console.warn('Supabase fetch failed, using local reviews', e);
@@ -100,18 +236,11 @@ export async function addMealReview(review: Omit<MealReview, 'id' | 'createdAt'>
     try {
       const { data, error } = await supabase
         .from('meal_reviews')
-        .insert([{
-          menu_id: review.menuId,
-          restaurant: review.restaurant,
-          date: review.date,
-          student_email_masked: review.studentEmailMasked,
-          rating: review.rating,
-          comment: review.comment,
-        }])
+        .insert([newReview])
         .select()
         .single();
       if (!error && data) {
-        return fromRow(data as MealReviewRow);
+        return data as MealReview;
       }
     } catch (e) {
       console.warn('Supabase insert failed, storing locally', e);

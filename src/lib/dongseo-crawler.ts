@@ -4,12 +4,12 @@ import { Notice, NoticeCategory, CafeteriaMenu, AcademicSchedule, RestaurantType
 // 동서대학교 공식 도메인 및 게시판 pCode 매핑
 const DSU_BASE_URL = 'https://www.dongseo.ac.kr';
 const PCODE_MAP: Record<NoticeCategory, string> = {
-  '전체': 'MN2000192',
-  '일반': 'MN2000192', // 동서공지
-  '학사': 'MN2000193', // 학사공지
-  '장학': 'MN2000194', // 장학공지
-  '취업': 'MN2000195', // 취업/창업
-  '행사': 'MN2000196', // 행사공지
+  '전체': 'MN2000194',
+  '학사': 'MN2000194',
+  '일반': 'MN2000192',
+  '장학': 'MN2000195',
+  '취업': 'MN2000197',
+  '행사': 'MN2000191',
 };
 
 // 현실적인 동서대 기본 목업 데이터 (오프라인 / 스크래핑 실패 시 즉각 폴백)
@@ -219,15 +219,99 @@ export const MOCK_SCHEDULE: AcademicSchedule[] = [
   }
 ];
 
+// 날짜 문자열 정규화: '15:15' 같은 당일 시간 표기는 오늘 날짜(YYYY-MM-DD)로 변환
+function normalizeDate(rawDate: string): string {
+  const trimmed = (rawDate || '').trim();
+  if (/^\d{1,2}:\d{1,2}$/.test(trimmed)) {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const cleaned = rawDate.replace(/[^\d.-]/g, '').trim();
+  const parts = cleaned.split(/[.-]/).filter(Boolean);
+  if (parts.length === 3) {
+    const yyyy = parts[0].length === 2 ? `20${parts[0]}` : parts[0];
+    const mm = parts[1].padStart(2, '0');
+    const dd = parts[2].padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return rawDate.trim() || new Date().toISOString().slice(0, 10);
+}
+
+// HTML 본문 정제: 악성 스크립트 제거, 이미지/링크 절대경로 변환, 반응형 스타일 클래스 주입
+function sanitizeAndFormatContentHtml($: cheerio.CheerioAPI, $container: cheerio.Cheerio<any>): string {
+  if (!$container.length) return '';
+
+  // 1. 위험/불필요 태그 및 SNS 공유 스크립트 제거
+  $container.find('script, style, iframe, object, embed, noscript, .pageSNSShare, [class*="sns"], [id*="sns"]').remove();
+
+  // 2. 인라인 이벤트 핸들러(onclick 등) 제거
+  $container.find('*').each((_, el) => {
+    const attribs = (el as any).attribs || {};
+    for (const attr of Object.keys(attribs)) {
+      if (attr.toLowerCase().startsWith('on')) {
+        $(el).removeAttr(attr);
+      }
+    }
+  });
+
+  // 3. 이미지 태그 절대경로 변환 및 모바일 반응형 클래스 부여
+  $container.find('img').each((_, el) => {
+    const $img = $(el);
+    let src = $img.attr('src') || $img.attr('data-src') || $img.attr('data-original') || '';
+    if (src) {
+      if (!src.startsWith('http')) {
+        src = `${DSU_BASE_URL}${src.startsWith('/') ? '' : '/'}${src}`;
+      }
+      $img.attr('src', src);
+      $img.removeAttr('width');
+      $img.removeAttr('height');
+      $img.removeAttr('org_width');
+      $img.removeAttr('org_height');
+      $img.removeAttr('zoomview');
+      $img.addClass('max-w-full h-auto rounded-xl my-3 shadow-sm mx-auto block');
+    }
+  });
+
+  // 4. 링크 태그 절대경로 변환 및 새 창 열기 속성
+  $container.find('a').each((_, el) => {
+    const $a = $(el);
+    let href = $a.attr('href') || '';
+    if (href && !href.startsWith('http') && !href.startsWith('mailto:') && !href.startsWith('tel:') && !href.startsWith('#')) {
+      $a.attr('href', `${DSU_BASE_URL}${href.startsWith('/') ? '' : '/'}${href}`);
+    }
+    $a.attr('target', '_blank');
+    $a.attr('rel', 'noopener noreferrer');
+    $a.addClass('text-dongseo-700 underline underline-offset-2');
+  });
+
+  // 5. 빈 에디터 여백 태그 정리
+  $container.find('div.cs-editor-outp').each((_, el) => {
+    if (!$(el).text().trim() && !$(el).find('img').length && !$(el).find('table').length) {
+      $(el).remove();
+    }
+  });
+
+  // 6. 표(Table) 태그 반응형 클래스 주입
+  $container.find('table').each((_, el) => {
+    $(el).addClass('w-full border-collapse my-3 text-xs');
+  });
+
+  return $container.html() || '';
+}
+
 // 공지사항 스크래핑 함수 (동서대 홈페이지)
 export async function scrapeDongseoNotices(category: NoticeCategory = '전체'): Promise<Notice[]> {
   try {
-    const pCode = PCODE_MAP[category] || 'MN2000192';
-    const targetUrl = `${DSU_BASE_URL}/kr/index.php?pCode=${pCode}`;
+    const pCode = PCODE_MAP[category] || 'MN2000194';
+    const targetUrl = `${DSU_BASE_URL}/kr/?pCode=${pCode}`;
 
     const res = await fetch(targetUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       },
       next: { revalidate: 300 }, // 5분 캐시
     });
@@ -242,21 +326,34 @@ export async function scrapeDongseoNotices(category: NoticeCategory = '전체'):
     const notices: Notice[] = [];
 
     // 동서대학교 일반 공지사항 게시판 tr 파싱
-    $('table.bbs_list tbody tr, table.board_list tbody tr').each((i, el) => {
+    $('table.bbs_list tbody tr, table.board_list tbody tr, .board_list table tbody tr, table.list_table tbody tr, table tbody tr, .board_list tr').each((i, el) => {
       const $row = $(el);
-      const isPinned = $row.hasClass('notice') || $row.find('.icon_notice, .notice_icon').length > 0;
-      const titleLink = $row.find('td.title a, td.subject a, td.tit a');
+
+      // 번호 칸(첫 번째 td) 검사: '공지' 뱃지 글인지 확인
+      const firstTd = $row.find('td').first();
+      const numText = firstTd.text().replace(/\s+/g, '').trim();
+      const isPinned = numText.includes('공지') || 
+                       $row.hasClass('notice') || 
+                       $row.find('.icon_notice, .notice_icon, .noti, img[alt*="공지"]').length > 0;
+
+      // 👈 사용자의 요청: 상단 고정 '공지' 글은 무시하고, '838' 같은 순수 숫자 번호 글부터 수집!
+      if (isPinned || !/^\d+$/.test(numText)) {
+        return; // 건너뛰기
+      }
+
+      const titleLink = $row.find('td.title a, td.subject a, td.tit a, a.tit, a[href*="idx="], a[href*="mode=view"]').first();
       const title = titleLink.text().trim();
       const href = titleLink.attr('href') || '';
       
-      const author = $row.find('td.name, td.writer, td.author').text().trim() || '동서대학교';
-      const date = $row.find('td.date, td.reg_date').text().trim() || new Date().toISOString().slice(0, 10);
-      const viewsStr = $row.find('td.hit, td.view').text().trim();
-      const views = parseInt(viewsStr, 10) || 0;
+      const author = $row.find('td.name, td.writer, td.author, .writer').text().trim() || '동서대학교';
+      const rawDate = $row.find('td.date, td.reg_date, td.regdate, .date').text().trim();
+      const date = normalizeDate(rawDate);
+      const viewsStr = $row.find('td.hit, td.view, td.count, .hit').text().trim();
+      const views = parseInt(viewsStr.replace(/[^\d]/g, ''), 10) || 0;
 
       // idx 파싱
       const urlParams = new URLSearchParams(href.replace(/^.*\?/, ''));
-      const idx = urlParams.get('idx') || `crawled-${i}`;
+      const idx = urlParams.get('idx') || `crawled-${numText || i}`;
 
       if (title) {
         notices.push({
@@ -267,6 +364,7 @@ export async function scrapeDongseoNotices(category: NoticeCategory = '전체'):
           date,
           views,
           isPinned,
+          source: 'homepage',
           url: href.startsWith('http') ? href : `${DSU_BASE_URL}${href.startsWith('/') ? '' : '/'}${href}`,
         });
       }
@@ -285,7 +383,7 @@ export async function scrapeDongseoNotices(category: NoticeCategory = '전체'):
 }
 
 // 공지사항 상세 본문 인앱 파싱
-export async function scrapeNoticeDetail(id: string): Promise<Notice | null> {
+export async function scrapeNoticeDetail(id: string, pCodeFallback = 'MN2000194'): Promise<Notice | null> {
   // 목업에 존재하는지 우선 확인
   const mockFound = MOCK_NOTICES.find(n => n.id === id);
   if (mockFound) {
@@ -293,7 +391,7 @@ export async function scrapeNoticeDetail(id: string): Promise<Notice | null> {
   }
 
   try {
-    const detailUrl = `${DSU_BASE_URL}/kr/index.php?pCode=MN2000192&mode=view&idx=${id}`;
+    const detailUrl = `${DSU_BASE_URL}/kr/?pCode=${pCodeFallback}&mode=view&idx=${id}`;
     const res = await fetch(detailUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
@@ -308,19 +406,30 @@ export async function scrapeNoticeDetail(id: string): Promise<Notice | null> {
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    const title = $('.view_tit, .view_title, .board_view h3').first().text().trim() || '동서대학교 공지사항';
-    const author = $('.view_info .writer, .info .author').first().text().trim() || '동서대학교';
-    const date = $('.view_info .date, .info .date').first().text().trim() || new Date().toISOString().slice(0, 10);
-    const contentHtml = $('.view_con, .view_content, .board_view_cont').html() || '';
-    const contentText = $('.view_con, .view_content, .board_view_cont').text().trim() || '';
+    const title = $('.view_tit, .view_title, .board_view h3, .view-title').first().text().trim() || '동서대학교 공지사항';
+    const author = $('.view_info .writer, .info .author, .writer').first().text().trim() || '동서대학교';
+    const rawDate = $('.view_info .date, .info .date, .date').first().text().trim();
+    const date = normalizeDate(rawDate);
+    const viewsStr = $('.view_info .hit, .info .hit, .hit').first().text().trim();
+    const views = parseInt(viewsStr.replace(/[^\d]/g, ''), 10) || 100;
+
+    // 본문 컨테이너 탐색 및 HTML 정제
+    const $content = $('#boardContents').length 
+      ? $('#boardContents') 
+      : $('.board-view-contents, .board-view-cont, .view_con, .view_content, .board_view').first();
+    const contentHtml = sanitizeAndFormatContentHtml($, $content);
+    let contentText = $content.text().replace(/\s+/g, ' ').trim() || '';
+    if (!contentText && $content.find('img').length > 0) {
+      contentText = '본 공지사항은 포스터 이미지로 제공됩니다. 아래 포스터와 학교 공식 홈페이지 링크를 확인해 주세요.';
+    }
 
     // 첨부파일 파싱
     const attachments: { name: string; url: string; size?: string }[] = [];
-    $('.file_list li a, .view_file a').each((_, a) => {
+    $('.file_list li a, .view_file a, .attach_list a').each((_, a) => {
       const $a = $(a);
       const name = $a.text().trim();
       const fileHref = $a.attr('href') || '';
-      if (name && fileHref) {
+      if (name && fileHref && !fileHref.startsWith('javascript:')) {
         attachments.push({
           name,
           url: fileHref.startsWith('http') ? fileHref : `${DSU_BASE_URL}${fileHref.startsWith('/') ? '' : '/'}${fileHref}`,
@@ -334,10 +443,11 @@ export async function scrapeNoticeDetail(id: string): Promise<Notice | null> {
       category: '일반',
       author,
       date,
-      views: 100,
+      views,
       contentHtml,
       contentText,
       attachments,
+      source: 'homepage',
       url: detailUrl,
     };
   } catch (error) {

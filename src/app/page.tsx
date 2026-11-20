@@ -3,6 +3,7 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import NoticeCard from '@/components/NoticeCard';
 import { MOCK_NOTICES, MOCK_CAFETERIA, MOCK_SCHEDULE } from '@/lib/dongseo-crawler';
+import { getNoticesFromDB } from '@/lib/supabase';
 import {
   Calendar,
   Utensils,
@@ -16,8 +17,9 @@ import {
   Layers,
 } from 'lucide-react';
 
-export default function HomePage() {
-  const recentNotices = MOCK_NOTICES.slice(0, 4);
+export default async function HomePage() {
+  const dbNotices = await getNoticesFromDB();
+  const recentNotices = dbNotices && dbNotices.length > 0 ? dbNotices.slice(0, 4) : MOCK_NOTICES.slice(0, 4);
   const todaysLunch = MOCK_CAFETERIA.find(
     (m) => m.restaurant === '학생식당' && m.mealType === '중식'
   ) || MOCK_CAFETERIA[0];

@@ -9,6 +9,7 @@ export interface NoticeAttachment {
 export interface Notice {
   id: string;
   title: string;
+  rawTitle?: string;
   category: NoticeCategory;
   author: string;
   date: string;
@@ -18,6 +19,10 @@ export interface Notice {
   attachments?: NoticeAttachment[];
   url: string;
   isPinned?: boolean;
+  source?: 'homepage' | 'instagram';
+  aiSummary?: string[];
+  aiDeadline?: string;
+  aiKeywords?: string[];
 }
 
 export type RestaurantType = '학생식당' | '교직원식당' | '기숙사식당';

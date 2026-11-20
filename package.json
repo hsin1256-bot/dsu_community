@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:crawl": "node scripts/crawl-test.js",
+    "test:summary": "node scripts/test-summary.js",
+    "test:models": "node scripts/check-models.js",
+    "sync:supabase": "node scripts/sync-to-supabase.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
