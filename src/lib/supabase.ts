@@ -20,19 +20,27 @@ let localNoticesCache: Notice[] = [];
 
 // DB 레코드 -> Notice 객체 매퍼
 function mapRowToNotice(row: any): Notice {
+  // content_text가 불릿 요약 형태인 경우 aiSummary로도 활용할 수 있게 파싱
+  const summaryBullets = row.content_text
+    ? row.content_text
+        .split('\n')
+        .map((l: string) => l.replace(/^[\*•\-]\s*/, '').trim())
+        .filter((l: string) => l.length > 0 && !l.startsWith('📌'))
+    : [];
+
   return {
     id: String(row.id),
     title: row.title,
-    rawTitle: row.raw_title,
+    rawTitle: row.raw_title || row.title,
     category: row.category as NoticeCategory,
     author: row.author || '동서대학교',
     date: row.date,
     views: Number(row.views) || 0,
     url: row.url,
-    contentHtml: row.content_html || row.contentHtml,
-    contentText: row.content_text || row.contentText,
-    aiSummary: row.ai_summary || row.aiSummary || [],
-    aiDeadline: row.ai_deadline || row.aiDeadline,
+    contentHtml: row.content_html || row.contentHtml || '',
+    contentText: row.content_text || row.contentText || '',
+    aiSummary: row.ai_summary || summaryBullets,
+    aiDeadline: row.ai_deadline || row.aiDeadline || null,
     aiKeywords: row.ai_keywords || row.aiKeywords || [],
     attachments: row.attachments || [],
     isPinned: Boolean(row.is_pinned ?? row.isPinned),
@@ -40,24 +48,19 @@ function mapRowToNotice(row: any): Notice {
   };
 }
 
-// Notice 객체 -> DB 컬럼 레코드 매퍼
+// Notice 객체 -> DB 컬럼 레코드 매퍼 (Method A 표준 컬럼 규격)
 function mapNoticeToRow(notice: Partial<Notice>): any {
   return {
-    id: notice.id,
+    id: String(notice.id),
     title: notice.title,
+    raw_title: notice.rawTitle || notice.title,
     category: notice.category,
-    author: notice.author,
+    author: notice.author || '동서대학교',
     date: notice.date,
-    views: notice.views || 0,
+    views: Number(notice.views) || 0,
     url: notice.url,
-    content_html: notice.contentHtml,
-    content_text: notice.contentText,
-    ai_summary: notice.aiSummary || [],
-    ai_deadline: notice.aiDeadline || null,
-    ai_keywords: notice.aiKeywords || [],
-    attachments: notice.attachments || [],
-    is_pinned: notice.isPinned ?? false,
-    source: notice.source || 'homepage',
+    content_html: notice.contentHtml || '',
+    content_text: notice.contentText || '',
   };
 }
 

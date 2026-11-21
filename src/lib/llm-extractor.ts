@@ -1,53 +1,134 @@
 /**
- * LLM 공지사항 구조화 추출 모듈
- * Google Gemini API를 활용하여 3줄 요약, 마감일(D-Day), 핵심 키워드 태그를 추출합니다.
- * API 키가 없거나 호출 실패 시에도 서비스가 중단되지 않도록 정규식 기반 스마트 폴백을 제공합니다.
+ * LLM 공지사항 구조화 추출 및 제목/본문 요약 모듈
+ * 
+ * Method A 표준:
+ *  - 모델: gemini-3.1-flash-lite (폴백: gemini-flash-lite-latest)
+ *  - 기능: 모바일용 제목 정제(cleanTitle) + 핵심 3~4줄 불릿 요약(contentSummary) 1회 통합 처리
+ *  - 서버 사이드 전용 (GEMINI_API_KEY)
  */
 
-export interface NoticeExtractionResult {
-  summary: string[];          // 핵심 3줄 요약
-  deadlineDate: string | null;// 마감일 (YYYY-MM-DD) 또는 null
-  keywords: string[];         // 키워드 태그 목록 (키워드 알림과 연동)
-  targetAudience: string;     // 대상자
-}
-
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const PRIMARY_MODEL = 'gemini-3.1-flash-lite';
+const FALLBACK_MODEL = 'gemini-flash-lite-latest';
 
-export async function extractNoticeWithLLM(
-  title: string,
-  content: string
-): Promise<NoticeExtractionResult> {
-  const cleanContent = (content || '').trim().slice(0, 3500);
-
-  // Gemini API 키가 있는 경우 gemini-1.5-pro 고정 호출
-  if (GEMINI_API_KEY && cleanContent.length > 30) {
-    try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
-
-      const prompt = `
-당신은 동서대학교 학생들을 위한 공지사항 분석 AI입니다.
-아래 공지사항 제목과 본문을 분석하여 대학생에게 꼭 필요한 핵심 정보를 정확히 추출하세요.
-반드시 아래 JSON 형식으로만 응답하고, 마크다운 코드블록(\`\`\`json 등) 없이 순수 JSON 문자열만 출력하세요.
-
-{
-  "summary": [
-    "핵심 요약 문장 1 (공지 목적 및 주요 내용)",
-    "핵심 요약 문장 2 (신청/참여 기간, 자격 요건, 혜택 등)",
-    "핵심 요약 문장 3 (신청 방법, 필수 제출 서류, 주의사항)"
-  ],
-  "deadlineDate": "YYYY-MM-DD 또는 마감일이 명시되지 않은 경우 null",
-  "keywords": ["핵심키워드1", "핵심키워드2", "핵심키워드3"],
-  "targetAudience": "대상 학생 요약 (예: 재학생 전원, 3~4학년 등)"
+export interface AIAnalysisResult {
+  cleanTitle: string;
+  contentSummary: string;
+  summary: string[];
+  deadlineDate: string | null;
+  keywords: string[];
 }
 
-[공지사항 제목]
-${title}
+// 규칙 기반 스마트 제목 정제 (폴백용)
+export function smartCleanTitle(rawTitle: string): string {
+  let title = rawTitle;
 
-[공지사항 본문]
+  // 장식 기호 및 따옴표 제거
+  title = title.replace(/[★☆]/g, ' ');
+  title = title.replace(/^['"<]+|['">]+$/g, '');
+
+  let semester = '';
+  const semMatch = title.match(/(?:20\d{2}[-.\s]*)?([12]학기|계절학기)/);
+  if (semMatch) semester = semMatch[1];
+
+  // 타대학 / 학교명 보존 (신라대, 한국해양대, 동의대, 부산대, 동아대 등)
+  const univMatch = title.match(/타대학\s*\(([가-힣]+대학교|[가-힣]+대)\)/) || title.match(/\(([가-힣]+대학교|[가-힣]+대)\)/);
+  const univName = univMatch ? univMatch[1] : '';
+
+  title = title.replace(/\[(전체|학사|행사|공지|일반|장학|취업)\]/g, ' ');
+  title = title.replace(/\(~.*?\)/g, ' ');
+  title = title.replace(/\[\d+\/\d+.*?\]/g, ' ');
+  title = title.replace(/타대학/g, ' ');
+  title = title.replace(/의\s*건$/g, '').replace(/에\s*관한\s*공고$/g, '').replace(/공고$/g, '안내');
+  title = title.replace(/\s+/g, ' ').trim();
+
+  // 학교명이 지워졌다면 제목 앞쪽에 자연스럽게 복원
+  if (univName && !title.includes(univName)) {
+    if (/(20\d{2}학년도)/.test(title)) {
+      title = title.replace(/(20\d{2}학년도)\s*/, `$1 ${univName} `);
+    } else {
+      title = `${univName} ${title}`;
+    }
+  }
+
+  if (semester && !title.includes(semester)) {
+    title = `${semester} ${title}`;
+  }
+  return title.replace(/^['"<]+|['">]+$/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Method A 통합 AI 분석기: 1회 API 호출로 제목 정제 및 불릿 요약 생성
+ */
+export async function analyzeNoticeWithAI(
+  rawTitle: string,
+  rawText: string,
+  hasImages = false,
+  modelName = PRIMARY_MODEL,
+  retryCount = 0
+): Promise<AIAnalysisResult> {
+  const cleanContent = (rawText || '').trim().slice(0, 3000);
+
+  // 본문이 거의 없고 포스터 이미지만 있는 경우
+  if (!cleanContent || cleanContent.length < 30) {
+    const fallbackTitle = smartCleanTitle(rawTitle);
+    const fallbackContent = hasImages
+      ? '📌 본 공지는 포스터 이미지로 안내되는 공지입니다.\n아래 첨부된 포스터 내용 및 하단 학교 공식 홈페이지 원문 링크에서 세부 내용을 확인해 주세요.'
+      : '상세 내용은 하단 학교 공식 홈페이지 링크를 확인해 주세요.';
+    return {
+      cleanTitle: fallbackTitle,
+      contentSummary: fallbackContent,
+      summary: [fallbackTitle],
+      deadlineDate: null,
+      keywords: [],
+    };
+  }
+
+  if (GEMINI_API_KEY) {
+    const prompt = `
+당신은 대학교 캠퍼스 앱의 공지/행사 편집 전문 에디터입니다.
+아래 원본 공지 정보를 분석하여 학생이 모바일 앱에서 한눈에 핵심을 파악할 수 있도록 JSON 형식으로 응답해 주세요.
+
+[요청 1: cleanTitle]
+- 모바일 화면용 정제 제목.
+- 불필요한 장식 기호(★, ★★, 📌 등), 문장 앞뒤의 감싸는 특수문자(' " < >), 대괄호([학사], [행사], [전체] 등)는 정리하세요.
+- ⚠️ 특정 대학교나 기관/주관 부서명(예: 신라대, 동아대, 평생교육원, 청년도약 인재양성 부트캠프사업단, 학생성공센터, 학생생활상담센터, 대학혁신지원사업단, 사회봉사센터 등)이 포함된 경우 학생들이 출처를 알 수 있도록 기관/학교 이름을 반드시 제목에 포함하세요!
+- 주요 인물(예: 산악인 엄홍길 대장)이나 핵심 행사명(예: DSU ANCHOR FAIR, 학술엑스포, KUSF 공모전 등)은 반드시 포함하여 자연스러운 안내 제목으로 만드세요.
+- 날짜 태그(~11/30, 11/14 등)는 본문에서 다루므로 제목에서는 제거하세요.
+- 말끝의 군더더기('~의 건', '~에 관한 공고')를 제거하세요.
+
+[요청 2: contentSummary]
+- 본문의 핵심 내용을 3~4개 내외의 깔끔한 불릿(•) 포인트로 요약하세요.
+- 행사/공지 대상, 주요 일정(일시/신청 기간/장소), 핵심 혜택 및 내용(기프티콘, 참가비 무료, 마일리지, 수료증 등), 신청 방법/링크 또는 문의처를 중심으로 요약하세요.
+- ⚠️ 웹 링크(URL)가 있는 경우 절대 [URL](URL) 처럼 같은 주소를 중복 표기하지 말고, '• **신청 링크**: https://...' 처럼 하나의 깔끔한 주소로만 1회 표기하세요.
+- 마크다운 볼드(**)와 불릿(•)을 사용하여 가독성을 높이세요.
+- 친절하고 명확한 문체(~합니다, ~바랍니다)를 사용하세요.
+
+[요청 3: deadlineDate]
+- 명시된 최종 신청 마감일이 있는 경우 YYYY-MM-DD 형식으로 작성하고, 없으면 null로 표기하세요.
+
+[요청 4: keywords]
+- 공지의 핵심 키워드 3~5개를 문자열 배열로 작성하세요.
+
+반드시 다른 설명 없이 아래 JSON 규격으로만 응답하세요:
+{
+  "cleanTitle": "정제된 제목",
+  "contentSummary": "• 대상: ...\\n• 일시 및 장소: ...\\n• 주요 내용 및 혜택: ...\\n• 신청 방법: ...",
+  "deadlineDate": "YYYY-MM-DD 또는 null",
+  "keywords": ["키워드1", "키워드2"]
+}
+
+원본 제목: "${rawTitle}"
+원본 본문:
+"""
 ${cleanContent}
-      `.trim();
+"""
+    `.trim();
 
-      const res = await fetch(endpoint, {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+
+    try {
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -56,90 +137,71 @@ ${cleanContent}
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.2,
             responseMimeType: 'application/json',
+            temperature: 0.1,
           },
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        const rawJsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawJsonText) {
-          const parsed = JSON.parse(rawJsonText);
+        const rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (rawJson) {
+          const parsed = JSON.parse(rawJson);
+          let cleanTitle = (parsed.cleanTitle || smartCleanTitle(rawTitle)).replace(/^['"`\s]+|['"`\s]+$/g, '').trim();
+          let contentSummary = parsed.contentSummary || '';
+
+          // 중복 URL 정제
+          contentSummary = contentSummary.replace(/\[(https?:\/\/[^\s\]]+)\]\(\1\)/g, '$1');
+          contentSummary = contentSummary.replace(/\[(https?:\/\/[^\s\]]+)\]\((https?:\/\/[^\s\)]+)\)/g, '$2');
+
+          const summaryLines = contentSummary
+            .split('\n')
+            .map((l: string) => l.replace(/^[\*•\-]\s*/, '').trim())
+            .filter(Boolean);
+
           return {
-            summary: Array.isArray(parsed.summary) && parsed.summary.length > 0
-              ? parsed.summary.slice(0, 3)
-              : [title],
-            deadlineDate: typeof parsed.deadlineDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.deadlineDate)
-              ? parsed.deadlineDate
-              : null,
-            keywords: Array.isArray(parsed.keywords) ? parsed.keywords.slice(0, 6) : [],
-            targetAudience: parsed.targetAudience || '전체 재학생',
+            cleanTitle,
+            contentSummary,
+            summary: summaryLines.length > 0 ? summaryLines.slice(0, 4) : [cleanTitle],
+            deadlineDate: typeof parsed.deadlineDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.deadlineDate) ? parsed.deadlineDate : null,
+            keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
           };
         }
+      } else if (res.status === 429 && retryCount < 2) {
+        console.warn(`[429 Rate Limit] Model ${modelName}. Retrying with fallback model...`);
+        return analyzeNoticeWithAI(rawTitle, rawText, hasImages, FALLBACK_MODEL, retryCount + 1);
+      } else if (res.status === 503 && retryCount < 2) {
+        console.warn(`[503 Busy] Model ${modelName}. Retrying with fallback model...`);
+        return analyzeNoticeWithAI(rawTitle, rawText, hasImages, FALLBACK_MODEL, retryCount + 1);
       }
-    } catch (err) {
-      console.warn('[LLM Extractor] gemini-1.5-pro failed, using smart fallback', err);
+    } catch (err: any) {
+      console.warn('[analyzeNoticeWithAI error]', err.message);
     }
   }
 
-  // 폴백: 키워드 및 날짜 정규식 기반 자체 추출
-  return smartFallbackExtraction(title, cleanContent);
+  // 폴백: 정규식 및 슬라이스
+  const fallbackTitle = smartCleanTitle(rawTitle);
+  const fallbackText = cleanContent.slice(0, 250).replace(/\s+/g, ' ').trim() + '...\n\n(자세한 내용은 하단 학교 홈페이지 원문을 확인해 주세요.)';
+  return {
+    cleanTitle: fallbackTitle,
+    contentSummary: fallbackText,
+    summary: [fallbackTitle],
+    deadlineDate: null,
+    keywords: [],
+  };
 }
 
-/**
- * 정규식 및 키워드 사전을 활용한 스마트 폴백 추출기
- */
-function smartFallbackExtraction(title: string, content: string): NoticeExtractionResult {
-  const text = `${title}\n${content}`;
-
-  // 1. 마감일 패턴 탐색 (예: ~ 10. 15, ~ 2026.10.15, ~ 10/15 등)
-  let deadlineDate: string | null = null;
-  const deadlineRegex = /(?:마감|신청\s*기?간?|접수\s*기?간?|기\s*한)[\s\S]{0,40}?(\d{4}[.-/]\s*\d{1,2}[.-/]\s*\d{1,2}|\d{1,2}[.-/]\s*\d{1,2})/i;
-  const match = text.match(deadlineRegex);
-
-  if (match && match[1]) {
-    const raw = match[1].replace(/\s+/g, '');
-    const parts = raw.split(/[.-/]/).filter(Boolean);
-    const currentYear = new Date().getFullYear();
-    if (parts.length === 3) {
-      const y = parts[0].length === 2 ? `20${parts[0]}` : parts[0];
-      deadlineDate = `${y}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-    } else if (parts.length === 2) {
-      deadlineDate = `${currentYear}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-    }
-  }
-
-  // 2. 키워드 태그 자동 추출
-  const KEYWORD_CANDIDATES = [
-    '장학금', '수강신청', '등록금', '중간고사', '기말고사', '성적', '계절학기',
-    '졸업', '휴학', '복학', '기숙사', '학생생활관', '대동제', '축제', '취업',
-    '채용', '인턴', '공모전', '봉사', '토익', '어학', '현장실습', '창업', '증명서'
-  ];
-  const foundKeywords = KEYWORD_CANDIDATES.filter(kw => text.includes(kw));
-
-  // 3. 3줄 요약 문장 생성
-  const sentences = content
-    .split(/[\n.]/)
-    .map(s => s.trim())
-    .filter(s => s.length > 15 && !s.includes('http') && !s.includes('문의:'));
-
-  const summary: string[] = [];
-  summary.push(`• ${title}`);
-  if (sentences.length > 0) {
-    summary.push(`• ${sentences[0]}`);
-  }
-  if (sentences.length > 1) {
-    summary.push(`• ${sentences[1]}`);
-  } else if (deadlineDate) {
-    summary.push(`• 주요 마감 일정: ${deadlineDate}까지`);
-  }
-
+// 하위 호환성을 위한 extractNoticeWithLLM 유지 (동일 로직 호출)
+export async function extractNoticeWithLLM(
+  title: string,
+  content: string
+): Promise<{ summary: string[]; deadlineDate: string | null; keywords: string[]; targetAudience: string }> {
+  const result = await analyzeNoticeWithAI(title, content);
   return {
-    summary,
-    deadlineDate,
-    keywords: foundKeywords.slice(0, 5),
+    summary: result.summary,
+    deadlineDate: result.deadlineDate,
+    keywords: result.keywords,
     targetAudience: '동서대학교 재학생',
   };
 }
