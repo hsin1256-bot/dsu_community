@@ -49,8 +49,9 @@ const PCODE_MAP = {
 // 커맨드라인 파라미터 파싱
 const args = process.argv.slice(2);
 let targetCategory = '행사';
-let targetCount = 15;
+let targetCount = 50;
 let minNum = null;
+let minDate = null;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--category' || args[i] === '-c') {
@@ -61,6 +62,9 @@ for (let i = 0; i < args.length; i++) {
     i++;
   } else if (args[i] === '--min-num' || args[i] === '-m') {
     minNum = parseInt(args[i + 1], 10) || null;
+    i++;
+  } else if (args[i] === '--min-date' || args[i] === '-d') {
+    minDate = (args[i + 1] || '').trim() || null;
     i++;
   }
 }
@@ -303,116 +307,136 @@ async function runPipeline() {
   console.log(`목표 수집 개수: ${targetCount}개`);
   console.log(`======================================================\n`);
 
-  // 1. 공지사항 목록 크롤링
-  console.log(`1️⃣ 동서대학교 ${targetCategory} 공지사항 목록 가져오는 중...`);
-  const res = await fetch(TARGET_URL, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    },
-  });
-
-  if (!res.ok) {
-    console.error(`접속 실패: HTTP ${res.status}`);
-    return;
-  }
-
-  const html = await res.text();
-  const $ = cheerio.load(html);
-
-  const rows = $('table.bbs_list tbody tr, table.board_list tbody tr, table.list_table tbody tr, table tbody tr');
-  console.log(`총 ${rows.length}개 행 발견! 상단 고정(공지) 글을 건너뛰고 최신 일반 공지만 ${targetCount}건 수집합니다.\n`);
-
   // 기존에 DB에 저장된 공지 목록 조회
   const { data: existingRows } = await supabase.from('notices').select('id, title, category, content_text');
   const existingMap = new Map((existingRows || []).map(r => [r.id, r]));
 
   const noticesToInsert = [];
   let collectedCount = 0;
+  let pg = 1;
+  let shouldStop = false;
 
-  for (let i = 0; i < rows.length; i++) {
-    if (collectedCount >= targetCount) {
-      console.log(`\n🛑 목표 수집 개수(${targetCount}개)에 도달하여 수집을 종료합니다.`);
-      break;
-    }
+  while (!shouldStop && collectedCount < targetCount) {
+    const pageUrl = `${TARGET_URL}&pg=${pg}`;
+    console.log(`\n1️⃣ 동서대학교 ${targetCategory} 공지사항 [페이지 ${pg}] 가져오는 중... (${pageUrl})`);
 
-    const $row = rows.eq(i);
-
-    // 첫 번째 번호 칸 검사
-    const firstTd = $row.find('td').first();
-    const numText = firstTd.text().replace(/\s+/g, '').trim();
-
-    // '공지' 뱃지나 번호가 비어있거나 숫자가 아닌 행은 스킵
-    const isPinned = numText.includes('공지') || 
-                     $row.hasClass('notice') || 
-                     $row.find('.icon_notice, .notice_icon, .noti, img[alt*="공지"]').length > 0;
-
-    if (isPinned || !/^\d+$/.test(numText)) {
-      continue; // 상단 고정 중요 공지는 건너뜁니다!
-    }
-
-    const postNum = parseInt(numText, 10);
-    if (minNum !== null && !isNaN(postNum) && postNum < minNum) {
-      console.log(`\n🛑 [최소 번호 도달] ${postNum}번 공지 발견. ${minNum}번 미만이므로 종료합니다.`);
-      break;
-    }
-
-    const titleLink = $row.find('td.title a, td.subject a, td.tit a, a.tit, a[href*="idx="]').first();
-    const rawTitle = titleLink.text().replace(/\s+/g, ' ').trim();
-    const href = titleLink.attr('href') || '';
-    if (!rawTitle) continue;
-
-    const author = $row.find('td.name, td.writer, td.author, .writer').text().trim() || '동서대학교';
-    const rawDate = $row.find('td.date, td.reg_date, .date').text().trim();
-    const formattedDate = normalizeDate(rawDate);
-    const viewsStr = $row.find('td.hit, td.view, .hit').text().trim();
-    const views = parseInt(viewsStr.replace(/[^\d]/g, ''), 10) || 0;
-
-    const urlParams = new URLSearchParams(href.replace(/^.*\?/, ''));
-    const idx = urlParams.get('idx') || `dsu-${numText}`;
-    const fullUrl = href.startsWith('http') ? href : `${DSU_BASE_URL}${href.startsWith('/') ? '' : '/'}${href}`;
-
-    collectedCount++;
-
-    // 이미 DB에 같은 카테고리로 요약까지 완료된 공지인지 확인
-    const alreadySaved = existingMap.get(idx);
-    if (alreadySaved && alreadySaved.category === targetCategory && alreadySaved.content_text && alreadySaved.content_text.length > 20) {
-      console.log(`[기저장 스킵] [${collectedCount}/${targetCount}] [번호: ${numText}] ID: ${idx} - 이미 DB에 저장되어 있어 스킵합니다.`);
-      continue;
-    }
-
-    console.log(`------------------------------------------------------`);
-    console.log(`[✨ 신규 ${targetCategory} 공지 (${collectedCount}/${targetCount}) | 번호: ${numText}] 글 idx: ${idx}`);
-    console.log(`   📌 원본 제목: "${rawTitle}"`);
-    console.log(`   📅 등록일: ${formattedDate} (원문: ${rawDate}) | 작성자: ${author}`);
-
-    // 상세 본문 크롤링
-    console.log(`   📄 본문 내용 크롤링 중...`);
-    const detail = await fetchNoticeDetail(idx, pCode, href);
-
-    // AI 통합 요약 (제목 정제 + 본문 불릿 요약)
-    console.log(`   🤖 AI 통합 요약 생성 중...`);
-    const { cleanTitle, contentSummary } = await analyzeNoticeWithAI(
-      rawTitle,
-      detail?.contentText || '',
-      detail?.hasImages || false
-    );
-    console.log(`   ✨ AI 정제 제목: "${cleanTitle}"`);
-    console.log(`   💡 요약된 본문:\n${contentSummary.split('\n').map(l => '      ' + l).join('\n')}`);
-
-    noticesToInsert.push({
-      id: idx,
-      title: cleanTitle,
-      raw_title: rawTitle,
-      category: targetCategory,
-      author,
-      date: formattedDate,
-      views,
-      url: fullUrl,
-      content_html: detail?.contentHtml || '',
-      content_text: contentSummary,
+    const res = await fetch(pageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
     });
 
-    await delay(1500); // API Rate limit 방지
+    if (!res.ok) {
+      console.error(`접속 실패: HTTP ${res.status}`);
+      break;
+    }
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    const rows = $('table.bbs_list tbody tr, table.board_list tbody tr, table.list_table tbody tr, table tbody tr');
+    if (rows.length === 0) {
+      console.log(`페이지 ${pg}에 게시물이 없습니다. 수집을 종료합니다.`);
+      break;
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      if (collectedCount >= targetCount) {
+        console.log(`\n🛑 목표 수집 개수(${targetCount}개)에 도달하여 수집을 종료합니다.`);
+        shouldStop = true;
+        break;
+      }
+
+      const $row = rows.eq(i);
+
+      // 첫 번째 번호 칸 검사
+      const firstTd = $row.find('td').first();
+      const numText = firstTd.text().replace(/\s+/g, '').trim();
+
+      // '공지' 뱃지나 번호가 비어있거나 숫자가 아닌 행은 스킵
+      const isPinned = numText.includes('공지') || 
+                       $row.hasClass('notice') || 
+                       $row.find('.icon_notice, .notice_icon, .noti, img[alt*="공지"]').length > 0;
+
+      if (isPinned || !/^\d+$/.test(numText)) {
+        continue; // 상단 고정 중요 공지는 건너뜁니다!
+      }
+
+      const postNum = parseInt(numText, 10);
+      if (minNum !== null && !isNaN(postNum) && postNum < minNum) {
+        console.log(`\n🛑 [최소 번호 도달] ${postNum}번 공지 발견. ${minNum}번 미만이므로 종료합니다.`);
+        shouldStop = true;
+        break;
+      }
+
+      const titleLink = $row.find('td.title a, td.subject a, td.tit a, a.tit, a[href*="idx="]').first();
+      const rawTitle = titleLink.text().replace(/\s+/g, ' ').trim();
+      const href = titleLink.attr('href') || '';
+      if (!rawTitle) continue;
+
+      const author = $row.find('td.name, td.writer, td.author, .writer').text().trim() || '동서대학교';
+      const rawDate = $row.find('td.date, td.reg_date, .date').text().trim();
+      const formattedDate = normalizeDate(rawDate);
+
+      if (minDate && formattedDate < minDate) {
+        console.log(`\n🛑 [최소 일자 도달] ${formattedDate} 공지 발견 (${rawTitle}). 기준일자(${minDate}) 이전이므로 수집을 종료합니다.`);
+        shouldStop = true;
+        break;
+      }
+
+      const viewsStr = $row.find('td.hit, td.view, .hit').text().trim();
+      const views = parseInt(viewsStr.replace(/[^\d]/g, ''), 10) || 0;
+
+      const urlParams = new URLSearchParams(href.replace(/^.*\?/, ''));
+      const idx = urlParams.get('idx') || `dsu-${numText}`;
+      const fullUrl = href.startsWith('http') ? href : `${DSU_BASE_URL}${href.startsWith('/') ? '' : '/'}${href}`;
+
+      collectedCount++;
+
+      // 이미 DB에 같은 카테고리로 요약까지 완료된 공지인지 확인
+      const alreadySaved = existingMap.get(idx);
+      if (alreadySaved && alreadySaved.category === targetCategory && alreadySaved.content_text && alreadySaved.content_text.length > 20) {
+        console.log(`[기저장 스킵] [${collectedCount}/${targetCount}] [번호: ${numText}] ID: ${idx} - 이미 DB에 저장되어 있어 스킵합니다.`);
+        continue;
+      }
+
+      console.log(`------------------------------------------------------`);
+      console.log(`[✨ 신규 ${targetCategory} 공지 (${collectedCount}/${targetCount}) | 번호: ${numText}] 글 idx: ${idx}`);
+      console.log(`   📌 원본 제목: "${rawTitle}"`);
+      console.log(`   📅 등록일: ${formattedDate} (원문: ${rawDate}) | 작성자: ${author}`);
+
+      // 상세 본문 크롤링
+      console.log(`   📄 본문 내용 크롤링 중...`);
+      const detail = await fetchNoticeDetail(idx, pCode, href);
+
+      // AI 통합 요약 (제목 정제 + 본문 불릿 요약)
+      console.log(`   🤖 AI 통합 요약 생성 중...`);
+      const { cleanTitle, contentSummary } = await analyzeNoticeWithAI(
+        rawTitle,
+        detail?.contentText || '',
+        detail?.hasImages || false
+      );
+      console.log(`   ✨ AI 정제 제목: "${cleanTitle}"`);
+      console.log(`   💡 요약된 본문:\n${contentSummary.split('\n').map(l => '      ' + l).join('\n')}`);
+
+      noticesToInsert.push({
+        id: idx,
+        title: cleanTitle,
+        raw_title: rawTitle,
+        category: targetCategory,
+        author,
+        date: formattedDate,
+        views,
+        url: fullUrl,
+        content_html: detail?.contentHtml || '',
+        content_text: contentSummary,
+      });
+
+      await delay(1500); // API Rate limit 방지
+    }
+
+    pg++;
+    await delay(1000);
   }
 
   if (noticesToInsert.length === 0) {
