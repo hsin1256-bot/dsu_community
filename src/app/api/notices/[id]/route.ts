@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getNoticeDetailFromDB, upsertNoticesToDB } from '@/lib/supabase';
-import { scrapeNoticeDetail } from '@/lib/dongseo-crawler';
+import { scrapeNoticeDetail, PCODE_MAP } from '@/lib/dongseo-crawler';
 import { analyzeNoticeWithAI } from '@/lib/llm-extractor';
 
 export const dynamic = 'force-dynamic';
@@ -19,7 +19,8 @@ export async function GET(
     // 2. DB에 본문이 없거나 비어있는 경우에만 동서대 웹사이트에서 직접 상세 본문 크롤링 & AI 요약 수행 후 DB 저장
     const hasValidContent = notice && notice.contentText && notice.contentText.length > 20;
     if (!notice || !hasValidContent) {
-      const scraped = await scrapeNoticeDetail(id);
+      const pCode = (notice?.category && PCODE_MAP[notice.category]) || 'MN2000194';
+      const scraped = await scrapeNoticeDetail(id, pCode, notice?.url);
       if (scraped) {
         const rawTitle = notice?.rawTitle || scraped.title;
         const rawText = scraped.contentText || '';

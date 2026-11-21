@@ -3,7 +3,7 @@ import { Notice, NoticeCategory, CafeteriaMenu, AcademicSchedule, RestaurantType
 
 // 동서대학교 공식 도메인 및 게시판 pCode 매핑
 const DSU_BASE_URL = 'https://www.dongseo.ac.kr';
-const PCODE_MAP: Record<NoticeCategory, string> = {
+export const PCODE_MAP: Record<NoticeCategory, string> = {
   '전체': 'MN2000194',
   '학사': 'MN2000194',
   '일반': 'MN2000192',
@@ -383,77 +383,114 @@ export async function scrapeDongseoNotices(category: NoticeCategory = '전체'):
 }
 
 // 공지사항 상세 본문 인앱 파싱
-export async function scrapeNoticeDetail(id: string, pCodeFallback = 'MN2000194'): Promise<Notice | null> {
+export async function scrapeNoticeDetail(
+  id: string,
+  pCodeFallback = 'MN2000194',
+  explicitUrl?: string
+): Promise<Notice | null> {
   // 목업에 존재하는지 우선 확인
   const mockFound = MOCK_NOTICES.find(n => n.id === id);
   if (mockFound) {
     return mockFound;
   }
 
-  try {
-    const detailUrl = `${DSU_BASE_URL}/kr/?pCode=${pCodeFallback}&mode=view&idx=${id}`;
-    const res = await fetch(detailUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-      },
-      next: { revalidate: 3600 },
-    });
+  const pCodesToTry = explicitUrl
+    ? []
+    : Array.from(new Set([pCodeFallback, 'MN2000194', 'MN2000191', 'MN2000192', 'MN2000195', 'MN2000197']));
 
-    if (!res.ok) {
-      return mockFound || null;
-    }
-
-    const html = await res.text();
-    const $ = cheerio.load(html);
-
-    const title = $('.view_tit, .view_title, .board_view h3, .view-title').first().text().trim() || '동서대학교 공지사항';
-    const author = $('.view_info .writer, .info .author, .writer').first().text().trim() || '동서대학교';
-    const rawDate = $('.view_info .date, .info .date, .date').first().text().trim();
-    const date = normalizeDate(rawDate);
-    const viewsStr = $('.view_info .hit, .info .hit, .hit').first().text().trim();
-    const views = parseInt(viewsStr.replace(/[^\d]/g, ''), 10) || 100;
-
-    // 본문 컨테이너 탐색 및 HTML 정제
-    const $content = $('#boardContents').length 
-      ? $('#boardContents') 
-      : $('.board-view-contents, .board-view-cont, .view_con, .view_content, .board_view').first();
-    const contentHtml = sanitizeAndFormatContentHtml($, $content);
-    let contentText = $content.text().replace(/\s+/g, ' ').trim() || '';
-    if (!contentText && $content.find('img').length > 0) {
-      contentText = '본 공지사항은 포스터 이미지로 제공됩니다. 아래 포스터와 학교 공식 홈페이지 링크를 확인해 주세요.';
-    }
-
-    // 첨부파일 파싱
-    const attachments: { name: string; url: string; size?: string }[] = [];
-    $('.file_list li a, .view_file a, .attach_list a').each((_, a) => {
-      const $a = $(a);
-      const name = $a.text().trim();
-      const fileHref = $a.attr('href') || '';
-      if (name && fileHref && !fileHref.startsWith('javascript:')) {
-        attachments.push({
-          name,
-          url: fileHref.startsWith('http') ? fileHref : `${DSU_BASE_URL}${fileHref.startsWith('/') ? '' : '/'}${fileHref}`,
-        });
-      }
-    });
-
-    return {
-      id,
-      title,
-      category: '일반',
-      author,
-      date,
-      views,
-      contentHtml,
-      contentText,
-      attachments,
-      source: 'homepage',
-      url: detailUrl,
-    };
-  } catch (error) {
-    console.error('[Notice Detail Scrape Error]', error);
-    return mockFound || null;
+  const urlsToTry: { url: string; pCode?: string }[] = [];
+  if (explicitUrl) {
+    const fullUrl = explicitUrl.startsWith('http')
+      ? explicitUrl
+      : `${DSU_BASE_URL}${explicitUrl.startsWith('/') ? '' : '/'}${explicitUrl}`;
+    urlsToTry.push({ url: fullUrl, pCode: pCodeFallback });
   }
+  for (const p of pCodesToTry) {
+    urlsToTry.push({
+      url: `${DSU_BASE_URL}/kr/?pCode=${p}&mode=view&idx=${id}`,
+      pCode: p,
+    });
+  }
+
+  const REVERSE_CATEGORY: Record<string, NoticeCategory> = {
+    'MN2000194': '학사',
+    'MN2000191': '행사',
+    'MN2000192': '일반',
+    'MN2000195': '장학',
+    'MN2000197': '취업',
+  };
+
+  for (const item of urlsToTry) {
+    try {
+      const res = await fetch(item.url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+        },
+        next: { revalidate: 3600 },
+      });
+
+      if (!res.ok) continue;
+
+      const html = await res.text();
+      const $ = cheerio.load(html);
+
+      // 본문 컨테이너 탐색
+      const $content = $('#boardContents').length 
+        ? $('#boardContents') 
+        : $('.board-view-contents, .board-view-cont, .view_con, .view_content, .board_view').first();
+
+      if (!$content.length && urlsToTry.length > 1) {
+        continue; // 다른 카테고리 게시판일 가능성 -> 다음 후보 시도
+      }
+
+      const title = $('.view_tit, .view_title, .board_view h3, .view-title').first().text().trim() || '동서대학교 공지사항';
+      const author = $('.view_info .writer, .info .author, .writer').first().text().trim() || '동서대학교';
+      const rawDate = $('.view_info .date, .info .date, .date').first().text().trim();
+      const date = normalizeDate(rawDate);
+      const viewsStr = $('.view_info .hit, .info .hit, .hit').first().text().trim();
+      const views = parseInt(viewsStr.replace(/[^\d]/g, ''), 10) || 100;
+
+      const contentHtml = sanitizeAndFormatContentHtml($, $content);
+      let contentText = $content.text().replace(/\s+/g, ' ').trim() || '';
+      if (!contentText && $content.find('img').length > 0) {
+        contentText = '본 공지사항은 포스터 이미지로 제공됩니다. 아래 포스터와 학교 공식 홈페이지 링크를 확인해 주세요.';
+      }
+
+      // 첨부파일 파싱
+      const attachments: { name: string; url: string; size?: string }[] = [];
+      $('.file_list li a, .view_file a, .attach_list a').each((_, a) => {
+        const $a = $(a);
+        const name = $a.text().trim();
+        const fileHref = $a.attr('href') || '';
+        if (name && fileHref && !fileHref.startsWith('javascript:')) {
+          attachments.push({
+            name,
+            url: fileHref.startsWith('http') ? fileHref : `${DSU_BASE_URL}${fileHref.startsWith('/') ? '' : '/'}${fileHref}`,
+          });
+        }
+      });
+
+      const detectedCategory: NoticeCategory = (item.pCode && REVERSE_CATEGORY[item.pCode]) || '일반';
+
+      return {
+        id,
+        title,
+        category: detectedCategory,
+        author,
+        date,
+        views,
+        contentHtml,
+        contentText,
+        attachments,
+        source: 'homepage',
+        url: item.url,
+      };
+    } catch (err) {
+      console.warn(`[Notice Detail Scrape Attempt Error for ${item.url}]`, err);
+    }
+  }
+
+  return mockFound || null;
 }
 
 function filterMockNotices(category: NoticeCategory): Notice[] {
