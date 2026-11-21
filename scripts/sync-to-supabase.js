@@ -28,8 +28,8 @@ function loadEnv() {
 }
 
 const env = loadEnv();
-const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || 'https://bwxerpvkfittijqidybw.supabase.co';
-const SUPABASE_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_hOlGjZteBmGeXH3acCX5rQ_dDB5S53b';
+const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const GEMINI_API_KEY = env.GEMINI_API_KEY || '';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
