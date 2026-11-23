@@ -19,9 +19,17 @@ export const isSupabaseConfigured = Boolean(
     !supabaseUrl.includes('example.com')
 );
 
+/**
+ * Next.js 14 는 서버의 fetch() 응답을 기본으로 캐시(Data Cache)합니다.
+ * Supabase 요청까지 캐시되면 동기화 후에도 예전(빈) 결과가 계속 나오므로 항상 새로 조회합니다.
+ * 화면 캐시가 필요하면 페이지의 `revalidate` 로 조절합니다.
+ */
+const noStoreFetch: typeof fetch = (input, init) => fetch(input, { ...init, cache: 'no-store' });
+const baseOptions = { global: { fetch: noStoreFetch } };
+
 /** 공개 조회용 (anon key, RLS 적용) */
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, baseOptions)
   : null;
 
 /**
@@ -35,6 +43,7 @@ export function getSupabaseAdmin(): SupabaseClient | null {
   if (!isSupabaseConfigured || !serviceKey) return null;
   if (!(serviceKey.startsWith('ey') || serviceKey.startsWith('sb_secret_'))) return null;
   return createClient(supabaseUrl, serviceKey, {
+    ...baseOptions,
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
@@ -43,6 +52,6 @@ export function getSupabaseAdmin(): SupabaseClient | null {
 export function createAuthedClient(accessToken: string): SupabaseClient | null {
   if (!isSupabaseConfigured) return null;
   return createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    global: { fetch: noStoreFetch, headers: { Authorization: `Bearer ${accessToken}` } },
   });
 }

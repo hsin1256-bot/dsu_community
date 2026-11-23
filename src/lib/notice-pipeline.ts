@@ -34,9 +34,12 @@ async function syncCategory(category: SyncableNoticeCategory, limit: number): Pr
   result.scraped = list.length;
 
   const state = await getNoticeSyncState(list.map((n) => n.id));
+  // Gemini 키가 없으면 요약 재시도가 의미 없으므로 새 공지만 처리 (학교 사이트 재요청 방지)
+  const canSummarize = Boolean(process.env.GEMINI_API_KEY);
   const targets = list.filter((n) => {
     const s = state.get(n.id);
-    return !s || s.aiStatus === 'pending' || s.aiStatus === 'failed';
+    if (!s) return true;
+    return canSummarize && (s.aiStatus === 'pending' || s.aiStatus === 'failed');
   });
   result.skipped = list.length - targets.length;
 
@@ -66,7 +69,7 @@ async function syncCategory(category: SyncableNoticeCategory, limit: number): Pr
             aiKeywords: ai.keywords,
           });
           if (ai.status === 'failed') result.failed++;
-          else result.processed++;
+          else result.processed++; // pending(키 없음)도 본문 저장은 성공
         } catch (err) {
           result.failed++;
           console.error(`[notice-sync] ${category} #${item.id} 처리 실패:`, err);

@@ -12,7 +12,7 @@ const FALLBACK_MODEL = 'gemini-flash-lite-latest';
 
 export interface AIAnalysisResult {
   /** done: 정상 요약 / fallback: 본문이 없어 요약 불필요(포스터 등) / failed: API 실패 → 다음 동기화 때 재시도 */
-  status: 'done' | 'fallback' | 'failed';
+  status: 'done' | 'fallback' | 'failed' | 'pending';
   cleanTitle: string;
   contentSummary: string;
   summary: string[];
@@ -186,9 +186,11 @@ ${cleanContent}
 
   // 폴백: 정규식 및 슬라이스
   const fallbackTitle = smartCleanTitle(rawTitle);
+  // 키가 없으면 '실패'가 아니라 '대기' → 키를 넣은 뒤 동기화 때 요약 (키 없이 매번 재시도하지 않음)
+  const fallbackStatus: AIAnalysisResult['status'] = GEMINI_API_KEY ? 'failed' : 'pending';
   const fallbackText = cleanContent.slice(0, 250).replace(/\s+/g, ' ').trim() + '...\n\n(자세한 내용은 하단 학교 홈페이지 원문을 확인해 주세요.)';
   return {
-    status: 'failed',
+    status: fallbackStatus,
     cleanTitle: fallbackTitle,
     contentSummary: fallbackText,
     summary: [fallbackTitle],
