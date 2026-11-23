@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@import "leaflet/dist/leaflet.css";
+
+/* Leaflet 커스텀 마커 기본 스타일 초기화 */
+.leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
 :root {
   --primary: #9e1b32;
   --primary-foreground: #ffffff;

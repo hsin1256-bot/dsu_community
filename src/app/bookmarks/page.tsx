@@ -21,11 +21,10 @@ export default function BookmarksPage() {
         return;
       }
 
-      const res = await fetch('/api/notices');
+      const res = await fetch(`/api/notices?ids=${encodeURIComponent(ids.join(','))}`);
       const data = await res.json();
       if (data.success) {
-        const filtered = (data.data as Notice[]).filter((n) => ids.includes(n.id));
-        setBookmarkedNotices(filtered);
+        setBookmarkedNotices(data.data as Notice[]);
       }
     } catch (err) {
       console.error(err);

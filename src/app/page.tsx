@@ -2,7 +2,10 @@ import React from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import NoticeCard from '@/components/NoticeCard';
-import { MOCK_NOTICES, MOCK_CAFETERIA, MOCK_SCHEDULE } from '@/lib/dongseo-crawler';
+import { getNoticesFromDB } from '@/lib/db/notices';
+import { getUpcomingSchedules } from '@/lib/db/schedules';
+import { getCafeteriaMenus } from '@/lib/db/cafeteria';
+import { todayKST, currentSemesterKST, daysBetween } from '@/lib/date-kst';
 import {
   Calendar,
   Utensils,
@@ -16,17 +19,29 @@ import {
   Layers,
 } from 'lucide-react';
 
-export default function HomePage() {
-  const now = new Date();
-  const academicYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-  const semester = currentMonth >= 3 && currentMonth <= 8 ? '1학기' : '2학기';
+// 공지·학사일정은 하루 몇 번만 바뀌므로 5분 단위로 다시 생성
+export const revalidate = 300;
 
-  const recentNotices = MOCK_NOTICES.slice(0, 4);
-  const todaysLunch = MOCK_CAFETERIA.find(
-    (m) => m.restaurant === '학생식당' && m.mealType === '중식'
-  ) || MOCK_CAFETERIA[0];
-  const upcomingSchedules = MOCK_SCHEDULE.filter((s) => s.isImportant).slice(0, 2);
+async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise;
+  } catch (e) {
+    console.error('[home]', e);
+    return fallback;
+  }
+}
+
+export default async function HomePage() {
+  const today = todayKST();
+  const { academicYear, semester } = currentSemesterKST();
+
+  const [noticeResult, upcomingSchedules, gvMenus] = await Promise.all([
+    safe(getNoticesFromDB({ page: 1, pageSize: 4 }), { data: [], total: 0 }),
+    safe(getUpcomingSchedules(today, 2), []),
+    safe(getCafeteriaMenus('글빌 식당'), []),
+  ]);
+  const recentNotices = noticeResult.data;
+  const todaysLunch = gvMenus[0];
 
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col">
@@ -51,7 +66,8 @@ export default function HomePage() {
               오늘도 활기찬 하루 되세요! 🎓
             </h2>
 
-            {/* 다가오는 D-Day 카드들 */}
+            {/* 다가오는 주요 학사일정 */}
+            {upcomingSchedules.length > 0 && (
             <div className="mt-4 pt-3 border-t border-white/15 grid grid-cols-2 gap-2.5">
               {upcomingSchedules.map((item) => (
                 <Link
@@ -62,13 +78,14 @@ export default function HomePage() {
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] text-dongseo-200 truncate">{item.category}</span>
                     <span className="text-xs font-black px-1.5 py-0.5 rounded bg-amber-400 text-slate-900">
-                      D-{item.dDay}
+                      {formatDDay(daysBetween(today, item.startDate))}
                     </span>
                   </div>
                   <p className="text-xs font-bold text-white mt-1 truncate">{item.title}</p>
                 </Link>
               ))}
             </div>
+            )}
           </div>
         </section>
 
@@ -132,7 +149,7 @@ export default function HomePage() {
                   <Utensils className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">오늘의 학생식당 중식</h3>
+                  <h3 className="text-sm font-bold text-slate-900">오늘의 글빌 식당 식단표</h3>
                   <p className="text-[11px] text-slate-400">{todaysLunch.cornerName}</p>
                 </div>
               </div>
@@ -146,7 +163,10 @@ export default function HomePage() {
 
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
               <p className="text-sm font-semibold text-slate-800">
-                {todaysLunch.menuItems.join(' · ')}
+                {(todaysLunch.menuItems && todaysLunch.menuItems.length > 0
+                  ? todaysLunch.menuItems
+                  : [todaysLunch.name]
+                ).join(' · ')}
               </p>
               <div className="flex items-center justify-between text-xs text-slate-500 mt-2 pt-2 border-t border-slate-200/60">
                 <span className="font-bold text-dongseo-700">{todaysLunch.price}</span>
@@ -174,12 +194,23 @@ export default function HomePage() {
           </div>
 
           <div className="space-y-2.5">
-            {recentNotices.map((notice) => (
-              <NoticeCard key={notice.id} notice={notice} />
-            ))}
+            {recentNotices.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-6 bg-white rounded-2xl border border-slate-100">
+                아직 불러온 공지가 없습니다.
+              </p>
+            ) : (
+              recentNotices.map((notice) => <NoticeCard key={notice.id} notice={notice} />)
+            )}
           </div>
         </section>
       </div>
     </main>
   );
+}
+
+/** 시작일까지 남은 일수 → 'D-3' / 'D-Day' / '진행 중' */
+function formatDDay(diff: number): string {
+  if (diff > 0) return `D-${diff}`;
+  if (diff === 0) return 'D-Day';
+  return '진행 중';
 }

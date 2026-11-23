@@ -8,9 +8,9 @@ import { Home, Megaphone, UtensilsCrossed, CalendarDays, Bookmark } from 'lucide
 const NAV_ITEMS = [
   { href: '/', label: '홈', icon: Home },
   { href: '/notices', label: '공지사항', icon: Megaphone },
-  { href: '/cafeteria', label: '학식메뉴', icon: UtensilsCrossed },
-  { href: '/schedule', label: '학사일정', icon: CalendarDays },
-  { href: '/bookmarks', label: '보관함', icon: Bookmark },
+  { href: '/cafeteria', label: '학식', icon: UtensilsCrossed },
+  { href: '/schedule', label: '캘린더', icon: CalendarDays },
+  { href: '/bookmarks', label: '마이페이지', icon: Bookmark },
 ];
 
 export default function BottomNav() {

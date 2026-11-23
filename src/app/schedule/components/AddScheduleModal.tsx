@@ -21,6 +21,9 @@ import {
   formatDate,
 } from '../utils';
 
+// 반복/알림은 아직 저장·발송 로직이 없어 선택해도 동작하지 않으므로 화면에서 숨겨 둡니다.
+const SHOW_REPEAT_ALERT = false;
+
 interface AddScheduleModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -552,7 +555,8 @@ export default function AddScheduleModal({
             )}
           </div>
 
-          {/* 반복 & 알림 설정 */}
+          {/* 반복 & 알림 설정: 저장·알림 기능이 구현되기 전까지 숨김 (SHOW_REPEAT_ALERT) */}
+          {SHOW_REPEAT_ALERT && (
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-3">
             <div>
               <div className="flex items-center justify-between text-xs">
@@ -654,6 +658,7 @@ export default function AddScheduleModal({
               )}
             </div>
           </div>
+          )}
 
           {/* 메모 입력 */}
           <div className="py-2 border-b border-slate-100">
