@@ -12,6 +12,15 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+export const REVIEW_PHOTOS_BUCKET = 'review-photos';
+
+// 화면(클라이언트)은 읽기 전용으로 유지하고, 모든 DB/Storage 쓰기는 서버 API 라우트에서만 허용
+function assertServerOnlyWrite(operationName: string): void {
+  if (typeof window !== 'undefined') {
+    throw new Error(`[Security] ${operationName}는 서버 API 라우트에서만 호출할 수 있습니다.`);
+  }
+}
+
 // ============================================================================
 // DB(snake_case) <-> 앱(camelCase) 변환
 // ============================================================================
@@ -195,6 +204,7 @@ export async function getMealReviews(
 export async function addMealReview(
   review: Omit<MealReview, 'id' | 'createdAt'>
 ): Promise<MealReview> {
+  assertServerOnlyWrite('addMealReview');
   const reviewId = `rev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
   if (isSupabaseConfigured && supabase) {
@@ -240,6 +250,7 @@ export async function reportMealReview(
   reporterUserId?: string | null,
   accessToken?: string | null
 ): Promise<boolean> {
+  assertServerOnlyWrite('reportMealReview');
   if (isSupabaseConfigured && supabaseUrl && supabaseAnonKey) {
     // 로그인 토큰이 있으면 인증 클라이언트로(auth.uid() = reporter_user_id 검증), 없으면 anon으로 INSERT 전용 호출
     const client = accessToken
@@ -282,6 +293,7 @@ export async function updateOwnMealReview(
   updates: { rating: number; comment: string },
   accessToken: string
 ): Promise<MealReview> {
+  assertServerOnlyWrite('updateOwnMealReview');
   if (!isSupabaseConfigured || !supabaseUrl || !supabaseAnonKey) {
     throw new Error('Supabase가 설정되지 않았습니다.');
   }
@@ -309,6 +321,7 @@ export async function deleteOwnMealReview(
   reviewId: string,
   accessToken: string
 ): Promise<boolean> {
+  assertServerOnlyWrite('deleteOwnMealReview');
   if (!isSupabaseConfigured || !supabaseUrl || !supabaseAnonKey) {
     throw new Error('Supabase가 설정되지 않았습니다.');
   }
@@ -325,4 +338,54 @@ export async function deleteOwnMealReview(
     throw new Error(error.message || '본인이 작성한 리뷰만 삭제할 수 있습니다.');
   }
   return true;
+}
+
+export async function uploadReviewPhoto(
+  fileBuffer: Buffer,
+  mimeType: string,
+  originalName: string,
+  accessToken?: string | null
+): Promise<string> {
+  assertServerOnlyWrite('uploadReviewPhoto');
+
+  if (!isSupabaseConfigured || !supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase Storage가 설정되지 않았습니다.');
+  }
+
+  const client = accessToken
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${accessToken}` } },
+      })
+    : supabase;
+
+  if (!client) {
+    throw new Error('Supabase 클라이언트를 초기화할 수 없습니다.');
+  }
+
+  const extMap: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+  };
+  const ext = extMap[mimeType] || originalName.split('.').pop()?.toLowerCase() || 'jpg';
+  const monthPrefix = new Date().toISOString().slice(0, 7); // YYYY-MM
+  const randomId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const objectPath = `reviews/${monthPrefix}/${randomId}.${ext}`;
+
+  const { error: uploadError } = await client.storage
+    .from(REVIEW_PHOTOS_BUCKET)
+    .upload(objectPath, fileBuffer, {
+      contentType: mimeType,
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.error('[Supabase Storage] upload error:', uploadError.message);
+    throw new Error(`스토리지 업로드 실패: ${uploadError.message}`);
+  }
+
+  const { data } = client.storage.from(REVIEW_PHOTOS_BUCKET).getPublicUrl(objectPath);
+  return data.publicUrl;
 }

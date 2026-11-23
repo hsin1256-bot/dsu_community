@@ -51,6 +51,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: '최소 2자 이상의 리뷰를 입력해 주세요.' }, { status: 400 });
     }
 
+    // DB 용량 보호: base64(data:) 직접 저장 차단, http(s) URL만 허용
+    if (photoUrl) {
+      if (typeof photoUrl !== 'string' || photoUrl.trim().toLowerCase().startsWith('data:')) {
+        return NextResponse.json(
+          { success: false, error: '사진은 Storage 업로드 후 URL 주소만 저장할 수 있습니다.' },
+          { status: 400 }
+        );
+      }
+      if (!/^https?:\/\//i.test(photoUrl.trim())) {
+        return NextResponse.json(
+          { success: false, error: '올바른 이미지 URL 형식이 아닙니다.' },
+          { status: 400 }
+        );
+      }
+    }
+
     // 단일 진입점(getCurrentUser)으로 현재 로그인 사용자 조회 (비로그인 시 userId: null)
     const currentUser = await getCurrentUser(req);
     const resolvedNickname =

@@ -43,6 +43,7 @@ export default function ReviewModal({
   const [selectedMenuId, setSelectedMenuId] = useState<string>('');
   const [comment, setComment] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string>('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -119,16 +120,51 @@ export default function ReviewModal({
         ).toFixed(1)
       : '0.0';
 
-  // 사진 업로드 핸들러 (로컬 파일 -> Data URL)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 사진 업로드 핸들러 (서버 API -> Supabase Storage 업로드 후 URL만 저장, 최대 5MB / 이미지 형식 제한)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoUrl(reader.result as string);
-        setShowPhotoPresets(false);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    setErrorMsg('');
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      setErrorMsg('JPG, PNG, WEBP, GIF 형식의 이미지 파일만 업로드할 수 있습니다.');
+      e.target.value = '';
+      return;
+    }
+
+    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSizeBytes) {
+      setErrorMsg('사진 용량은 최대 5MB 이하만 업로드할 수 있습니다.');
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const authHeaders = await getCurrentAuthHeaders();
+      const res = await fetch('/api/cafeteria/reviews/upload', {
+        method: 'POST',
+        headers: authHeaders,
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.url) {
+        throw new Error(data.error || '사진 업로드에 실패했습니다.');
+      }
+
+      setPhotoUrl(data.url);
+      setShowPhotoPresets(false);
+    } catch (err: any) {
+      setErrorMsg(err?.message || '사진 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = '';
     }
   };
 
@@ -493,10 +529,13 @@ export default function ReviewModal({
                   <div className="flex items-center gap-2">
                     <label className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-white border border-dashed border-slate-300 hover:border-dongseo-400 rounded-xl cursor-pointer text-slate-600 hover:text-dongseo-700 transition">
                       <Upload className="w-3.5 h-3.5 text-dongseo-700" />
-                      <span className="font-semibold text-xs">내 기기에서 사진 선택</span>
+                      <span className="font-semibold text-xs">
+                        {uploadingPhoto ? '스토리지 업로드 중...' : '사진 선택 (JPG/PNG/WEBP, 최대 5MB)'}
+                      </span>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        disabled={uploadingPhoto}
                         className="hidden"
                         onChange={handleFileUpload}
                       />
