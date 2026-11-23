@@ -1,4 +1,7 @@
-export type NoticeCategory = '전체' | '일반' | '학사' | '장학' | '취업' | '행사';
+export type NoticeCategory = '전체' | '학사' | '모집' | '장학' | '취업' | '행사';
+/** 실제 DB 에 저장되는 카테고리 ('전체'는 화면 필터 전용) */
+export type SyncableNoticeCategory = Exclude<NoticeCategory, '전체'>;
+export type NoticeAiStatus = 'pending' | 'done' | 'fallback' | 'failed';
 
 export interface NoticeAttachment {
   name: string;
@@ -9,6 +12,7 @@ export interface NoticeAttachment {
 export interface Notice {
   id: string;
   title: string;
+  rawTitle?: string;
   category: NoticeCategory;
   author: string;
   date: string;
@@ -18,33 +22,46 @@ export interface Notice {
   attachments?: NoticeAttachment[];
   url: string;
   isPinned?: boolean;
+  source?: 'homepage' | 'instagram';
+  aiSummary?: string[];
+  aiDeadline?: string;
+  aiKeywords?: string[];
+  aiStatus?: NoticeAiStatus;
 }
 
-export type RestaurantType = '학생식당' | '교직원식당' | '기숙사식당';
-export type MealType = '조식' | '중식' | '석식';
+export type RestaurantType = '글빌 식당' | '스플 식당' | '경영 식당' | '학생식당' | '교직원식당' | '기숙사식당';
+export type MealType = '조식' | '중식' | '석식' | '상시';
 
 export interface CafeteriaMenu {
   id: string;
-  date: string; // YYYY-MM-DD
+  date?: string; // YYYY-MM-DD
   restaurant: RestaurantType;
-  mealType: MealType;
-  cornerName: string; // e.g. '일품코너', '백반', '스페셜'
-  menuItems: string[];
+  category: string; // e.g. '찌개/밥', '돈까스/덮밥/비빔밥', '분식', '사이드', '음료', '겨울철 별미'
+  name: string; // 개별 메뉴명 (e.g. '순두부찌개(공기밥)')
+  mealType?: MealType;
+  cornerName?: string;
+  menuItems?: string[];
   price?: string;
   calories?: string;
-  rating: number; // 평균 평점 (1.0 ~ 5.0)
+  rating: number; // 평균 평점 (0.0 ~ 5.0)
   reviewCount: number;
 }
 
 export interface MealReview {
   id: string;
+  userId?: string | null; // 로그인 연동 시 auth.users.id (UUID)
   menuId: string;
   restaurant: RestaurantType;
+  menuName?: string;
+  nickname?: string;
   date: string;
-  studentEmailMasked: string; // e.g. 'ds***@dongseo.ac.kr'
+  studentEmailMasked: string; // e.g. '이승민 (2023****)' or 'ds***@dongseo.ac.kr'
   rating: number;
   comment: string;
+  photoUrl?: string;
   createdAt: string;
+  reported?: boolean;
+  reportReason?: string;
 }
 
 export interface AcademicSchedule {

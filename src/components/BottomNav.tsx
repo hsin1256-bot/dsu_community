@@ -3,14 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Megaphone, UtensilsCrossed, CalendarDays, Bookmark } from 'lucide-react';
+import { Home, Megaphone, UtensilsCrossed, CalendarDays, UserRound } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/', label: '홈', icon: Home },
   { href: '/notices', label: '공지사항', icon: Megaphone },
-  { href: '/cafeteria', label: '학식메뉴', icon: UtensilsCrossed },
-  { href: '/schedule', label: '학사일정', icon: CalendarDays },
-  { href: '/bookmarks', label: '보관함', icon: Bookmark },
+  { href: '/cafeteria', label: '학식', icon: UtensilsCrossed },
+  { href: '/schedule', label: '캘린더', icon: CalendarDays },
+  { href: '/my', label: '마이', icon: UserRound },
 ];
 
 export default function BottomNav() {
@@ -21,10 +21,13 @@ export default function BottomNav() {
       <div className="max-w-[480px] mx-auto flex items-center justify-around h-16 px-2">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
+          // 마이 탭: 마이페이지 하위 화면(보관함 포함)에서도 활성 표시
           const isActive =
             item.href === '/'
               ? pathname === '/'
-              : pathname.startsWith(item.href);
+              : item.href === '/my'
+                ? pathname.startsWith('/my') || pathname.startsWith('/bookmarks')
+                : pathname.startsWith(item.href);
 
           return (
             <Link

@@ -21,11 +21,10 @@ export default function BookmarksPage() {
         return;
       }
 
-      const res = await fetch('/api/notices');
+      const res = await fetch(`/api/notices?ids=${encodeURIComponent(ids.join(','))}`);
       const data = await res.json();
       if (data.success) {
-        const filtered = (data.data as Notice[]).filter((n) => ids.includes(n.id));
-        setBookmarkedNotices(filtered);
+        setBookmarkedNotices(data.data as Notice[]);
       }
     } catch (err) {
       console.error(err);
@@ -43,7 +42,7 @@ export default function BookmarksPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col pb-6">
-      <Header showBack title="보관함 (스크랩)" />
+      <Header showBack title="보관함" />
 
       <div className="p-4 flex-1">
         <div className="flex items-center justify-between text-xs text-slate-500 mb-3 px-1">
