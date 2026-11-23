@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMealReviews, addMealReview, reportMealReview } from '@/lib/supabase';
+import { getCurrentUser } from '@/lib/current-user';
 import { RestaurantType } from '@/types';
 
 function maskDongseoEmail(email?: string, nickname?: string): string {
@@ -44,13 +45,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: '최소 2자 이상의 리뷰를 입력해 주세요.' }, { status: 400 });
     }
 
-    const masked = maskDongseoEmail(email, nickname);
+    // 단일 진입점(getCurrentUser)으로 현재 로그인 사용자 조회 (비로그인 시 userId: null)
+    const currentUser = await getCurrentUser(req);
+    const resolvedNickname =
+      (nickname && nickname.trim()) || currentUser.nickname || '동서대 학우';
+    const resolvedEmail = email || currentUser.email || undefined;
+    const masked = maskDongseoEmail(resolvedEmail, resolvedNickname);
 
     const created = await addMealReview({
+      userId: currentUser.id,
       menuId: menuId || 'general',
       restaurant: (restaurant || '글빌 식당') as RestaurantType,
       menuName: menuName || '',
-      nickname: nickname ? nickname.trim() : '동서대 학우',
+      nickname: resolvedNickname,
       date: date || new Date().toISOString().slice(0, 10),
       studentEmailMasked: masked,
       rating: Number(rating),

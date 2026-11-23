@@ -15,6 +15,7 @@ import {
   User,
 } from 'lucide-react';
 import { RestaurantType, CafeteriaMenu, MealReview } from '@/types';
+import { getCurrentUser, getCurrentAuthHeaders } from '@/lib/current-user';
 
 interface ReviewModalProps {
   isOpen: boolean;
@@ -54,7 +55,7 @@ export default function ReviewModal({
   // 프리셋 사진 선택 팝오버
   const [showPhotoPresets, setShowPhotoPresets] = useState(false);
 
-  // 모달이 열리거나 선택 메뉴가 바뀔 때 폼 대상 메뉴 동기화
+  // 모달이 열리거나 선택 메뉴가 바뀔 때 폼 대상 메뉴 & 현재 사용자 닉네임 동기화
   useEffect(() => {
     if (isOpen) {
       if (menu) {
@@ -66,6 +67,12 @@ export default function ReviewModal({
       }
       setErrorMsg('');
       setSuccessMsg('');
+
+      getCurrentUser().then((user) => {
+        if (user.isAuthenticated && user.nickname) {
+          setNickname((prev) => prev || user.nickname);
+        }
+      });
     }
   }, [isOpen, menu, availableMenus]);
 
@@ -142,9 +149,10 @@ export default function ReviewModal({
     setLoading(true);
 
     try {
+      const authHeaders = await getCurrentAuthHeaders();
       const res = await fetch('/api/cafeteria/reviews', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           restaurant,
           menuId: submitMenu?.id || 'general',

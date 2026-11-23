@@ -40,6 +40,7 @@ export interface CafeteriaMenu {
 
 export interface MealReview {
   id: string;
+  userId?: string | null; // 로그인 연동 시 auth.users.id (UUID)
   menuId: string;
   restaurant: RestaurantType;
   menuName?: string;

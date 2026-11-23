@@ -29,6 +29,7 @@ type CafeteriaMenuRow = {
 
 type MealReviewRow = {
   id: string;
+  user_id?: string | null;
   menu_id: string;
   restaurant: MealReview['restaurant'];
   menu_name?: string | null;
@@ -58,6 +59,7 @@ const fromMenuRow = (r: CafeteriaMenuRow): CafeteriaMenu => ({
 
 const fromReviewRow = (r: MealReviewRow): MealReview => ({
   id: r.id,
+  userId: r.user_id ?? null,
   menuId: r.menu_id,
   restaurant: r.restaurant,
   menuName: r.menu_name || undefined,
@@ -201,6 +203,7 @@ export async function addMealReview(
       .insert([
         {
           id: reviewId,
+          user_id: review.userId ?? null,
           menu_id: review.menuId,
           restaurant: review.restaurant,
           menu_name: review.menuName || '',
