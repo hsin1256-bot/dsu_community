@@ -183,23 +183,28 @@ export default function ReviewModal({
     }
   };
 
-  // 신고 제출 핸들러
+  // 신고 제출 핸들러 (별도 review_reports 테이블에 INSERT 전용)
   const handleReportSubmit = async () => {
     if (!reportTargetReview) return;
     try {
-      await fetch('/api/cafeteria/reviews', {
+      const authHeaders = await getCurrentAuthHeaders();
+      const res = await fetch('/api/cafeteria/reviews', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           reviewId: reportTargetReview.id,
           reason: reportReason,
         }),
       });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || '신고 접수에 실패했습니다.');
+      }
       setReportedIds((prev) => ({ ...prev, [reportTargetReview.id]: true }));
       setReportTargetReview(null);
       alert('신고가 접수되었습니다. 관리자 확인 후 즉시 조치됩니다.');
-    } catch {
-      alert('신고 접수 중 오류가 발생했습니다.');
+    } catch (err: any) {
+      alert(err?.message || '신고 접수 중 오류가 발생했습니다.');
     }
   };
 

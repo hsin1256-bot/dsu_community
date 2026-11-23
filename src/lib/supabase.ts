@@ -234,24 +234,95 @@ export async function addMealReview(
   return newReview;
 }
 
-export async function reportMealReview(reviewId: string, reason: string): Promise<boolean> {
-  if (isSupabaseConfigured && supabase) {
-    const { error } = await supabase
-      .from('meal_reviews')
-      .update({ reported: true, report_reason: reason })
-      .eq('id', reviewId);
+export async function reportMealReview(
+  reviewId: string,
+  reason: string,
+  reporterUserId?: string | null,
+  accessToken?: string | null
+): Promise<boolean> {
+  if (isSupabaseConfigured && supabaseUrl && supabaseAnonKey) {
+    // 로그인 토큰이 있으면 인증 클라이언트로(auth.uid() = reporter_user_id 검증), 없으면 anon으로 INSERT 전용 호출
+    const client = accessToken
+      ? createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: `Bearer ${accessToken}` } },
+        })
+      : supabase;
 
-    if (error) {
-      console.error('[Supabase] meal_reviews report error:', error.message);
-      throw new Error(`Supabase 신고 처리 실패: ${error.message}`);
+    if (client) {
+      const { error } = await client.from('review_reports').insert([
+        {
+          review_id: reviewId,
+          reporter_user_id: reporterUserId ?? null,
+          reason: reason.trim(),
+          status: 'pending',
+        },
+      ]);
+
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('이미 신고하신 리뷰입니다.');
+        }
+        console.error('[Supabase] review_reports insert error:', error.message);
+        throw new Error(`신고 접수 실패: ${error.message}`);
+      }
+      return true;
     }
-    return true;
   }
 
   const target = fallbackReviews.find((r) => r.id === reviewId);
   if (target) {
     target.reported = true;
     target.reportReason = reason;
+  }
+  return true;
+}
+
+export async function updateOwnMealReview(
+  reviewId: string,
+  updates: { rating: number; comment: string },
+  accessToken: string
+): Promise<MealReview> {
+  if (!isSupabaseConfigured || !supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase가 설정되지 않았습니다.');
+  }
+  const authedClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+
+  const { data, error } = await authedClient
+    .from('meal_reviews')
+    .update({
+      rating: updates.rating,
+      comment: updates.comment.trim(),
+    })
+    .eq('id', reviewId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || '본인이 작성한 리뷰만 수정할 수 있습니다.');
+  }
+  return fromReviewRow(data as MealReviewRow);
+}
+
+export async function deleteOwnMealReview(
+  reviewId: string,
+  accessToken: string
+): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase가 설정되지 않았습니다.');
+  }
+  const authedClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+
+  const { error } = await authedClient
+    .from('meal_reviews')
+    .delete()
+    .eq('id', reviewId);
+
+  if (error) {
+    throw new Error(error.message || '본인이 작성한 리뷰만 삭제할 수 있습니다.');
   }
   return true;
 }

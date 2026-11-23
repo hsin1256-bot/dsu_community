@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMealReviews, addMealReview, reportMealReview } from '@/lib/supabase';
+import {
+  getMealReviews,
+  addMealReview,
+  reportMealReview,
+  updateOwnMealReview,
+  deleteOwnMealReview,
+} from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/current-user';
 import { RestaurantType } from '@/types';
 
@@ -80,9 +86,88 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: false, error: '리뷰 ID가 필요합니다.' }, { status: 400 });
     }
 
-    await reportMealReview(reviewId, reason || '부적절한 리뷰');
+    const currentUser = await getCurrentUser(req);
+    const authHeader = req.headers.get('authorization');
+    const accessToken = authHeader?.toLowerCase().startsWith('bearer ')
+      ? authHeader.slice(7).trim()
+      : null;
+
+    await reportMealReview(
+      reviewId,
+      reason || '부적절한 리뷰',
+      currentUser.id,
+      accessToken
+    );
     return NextResponse.json({ success: true, message: '신고가 정상적으로 접수되었습니다.' });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: '신고 처리 중 오류가 발생했습니다.' }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error?.message || '신고 처리 중 오류가 발생했습니다.' },
+      { status: 400 }
+    );
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const currentUser = await getCurrentUser(req);
+    const authHeader = req.headers.get('authorization');
+    const accessToken = authHeader?.toLowerCase().startsWith('bearer ')
+      ? authHeader.slice(7).trim()
+      : null;
+
+    if (!currentUser.isAuthenticated || !accessToken) {
+      return NextResponse.json(
+        { success: false, error: '로그인한 본인만 리뷰를 수정할 수 있습니다.' },
+        { status: 401 }
+      );
+    }
+
+    const body = await req.json();
+    const { reviewId, rating, comment } = body;
+    if (!reviewId || !rating || rating < 1 || rating > 5 || !comment || comment.trim().length < 2) {
+      return NextResponse.json(
+        { success: false, error: '수정할 리뷰 ID, 별점(1~5), 내용(2자 이상)이 필요합니다.' },
+        { status: 400 }
+      );
+    }
+
+    const updated = await updateOwnMealReview(reviewId, { rating: Number(rating), comment }, accessToken);
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error?.message || '리뷰 수정 중 오류가 발생했습니다.' },
+      { status: 403 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const currentUser = await getCurrentUser(req);
+    const authHeader = req.headers.get('authorization');
+    const accessToken = authHeader?.toLowerCase().startsWith('bearer ')
+      ? authHeader.slice(7).trim()
+      : null;
+
+    if (!currentUser.isAuthenticated || !accessToken) {
+      return NextResponse.json(
+        { success: false, error: '로그인한 본인만 리뷰를 삭제할 수 있습니다.' },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+    const reviewId = searchParams.get('reviewId');
+    if (!reviewId) {
+      return NextResponse.json({ success: false, error: '리뷰 ID가 필요합니다.' }, { status: 400 });
+    }
+
+    await deleteOwnMealReview(reviewId, accessToken);
+    return NextResponse.json({ success: true, message: '리뷰가 삭제되었습니다.' });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error?.message || '리뷰 삭제 중 오류가 발생했습니다.' },
+      { status: 403 }
+    );
   }
 }
