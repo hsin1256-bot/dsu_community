@@ -2,8 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, Bell, Bookmark, GraduationCap } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Bell, GraduationCap } from 'lucide-react';
+import { useAlerts } from '@/lib/use-alerts';
 
 interface HeaderProps {
   title?: string;
@@ -12,9 +13,8 @@ interface HeaderProps {
 
 export default function Header({ title, showBack = false }: HeaderProps) {
   const router = useRouter();
-  const pathname = usePathname();
 
-  const isHome = pathname === '/';
+  const { unseenCount } = useAlerts();
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100 px-4 py-3">
@@ -52,20 +52,17 @@ export default function Header({ title, showBack = false }: HeaderProps) {
 
         <div className="flex items-center gap-1">
           <Link
-            href="/bookmarks"
-            className="p-2 text-slate-600 hover:text-dongseo-700 rounded-lg hover:bg-slate-50 transition"
-            aria-label="보관함"
-          >
-            <Bookmark className="w-5 h-5" />
-          </Link>
-          <button
-            onClick={() => alert('새로운 공지사항 알림이 활성화되었습니다.')}
+            href="/alerts"
             className="p-2 text-slate-600 hover:text-dongseo-700 rounded-lg hover:bg-slate-50 transition relative"
-            aria-label="알림"
+            aria-label={unseenCount > 0 ? `알림함 (새 알림 ${unseenCount}개)` : '알림함'}
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-dongseo-600 rounded-full ring-2 ring-white"></span>
-          </button>
+            {unseenCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-dongseo-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white flex items-center justify-center">
+                {unseenCount > 9 ? '9+' : unseenCount}
+              </span>
+            )}
+          </Link>
         </div>
       </div>
     </header>

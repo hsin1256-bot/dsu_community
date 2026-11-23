@@ -1,7 +1,9 @@
 'use client';
 
-import React from 'react';
-import { X, Calendar, Clock, Edit2, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Calendar, Clock, Edit2, Trash2, BellRing } from 'lucide-react';
+import { isDdayPinned, toggleDdayPin } from '@/lib/alert-settings';
+import { todayKST, daysBetween } from '@/lib/date-kst';
 import { CustomSchedule } from '../types';
 import { getScheduleColor } from '../utils';
 
@@ -18,9 +20,18 @@ export default function ScheduleDetailModal({
   onOpenEdit,
   onDelete,
 }: ScheduleDetailModalProps) {
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => {
+    if (schedule) setPinned(isDdayPinned(schedule.id));
+  }, [schedule]);
+
   if (!schedule) return null;
 
   const isPersonal = schedule.id.startsWith('personal-');
+  // 남은 날짜: 시작 전이면 D-n, 기간 중이면 0(D-Day), 종료 후면 음수
+  const today = todayKST();
+  const daysToStart = daysBetween(today, schedule.startDate);
+  const dDay = daysToStart >= 0 ? daysToStart : schedule.endDate >= today ? 0 : -1;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
@@ -76,22 +87,38 @@ export default function ScheduleDetailModal({
             </div>
           </div>
 
-          {schedule.dDay !== undefined && (
+          {(
             <div className="flex items-center justify-between pt-1 border-t border-slate-200/50">
               <span className="text-slate-500 font-medium flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
                 남은 기간
               </span>
               <span className="font-extrabold text-dongseo-700 bg-dongseo-50 px-2 py-0.5 rounded-full text-[11px]">
-                {schedule.dDay === 0
-                  ? 'D-Day (오늘)'
-                  : schedule.dDay > 0
-                  ? `D-${schedule.dDay}`
+                {dDay === 0
+                  ? daysToStart === 0 ? 'D-Day (오늘)' : '진행 중'
+                  : dDay > 0
+                  ? `D-${dDay}`
                   : '종료된 일정'}
               </span>
             </div>
           )}
         </div>
+
+        {/* D-Day 알림 받기 (끝나지 않은 일정만) */}
+        {dDay >= 0 && (
+          <button
+            type="button"
+            aria-pressed={pinned}
+            onClick={() => setPinned(toggleDdayPin(schedule.id))}
+            className={`w-full flex items-center gap-2 p-3 rounded-2xl border text-xs font-bold transition ${
+              pinned ? 'bg-dongseo-50 border-dongseo-200 text-dongseo-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <BellRing className={`w-4 h-4 ${pinned ? 'fill-dongseo-200' : ''}`} />
+            <span className="flex-1 text-left">{pinned ? 'D-Day 알림 받는 중' : 'D-Day 알림 받기'}</span>
+            <span className="text-[11px] font-medium text-slate-400">30일 전부터 알림함에 표시</span>
+          </button>
+        )}
 
         {/* 메모가 있는 경우 표시 */}
         {schedule.memo && (

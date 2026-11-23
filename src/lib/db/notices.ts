@@ -156,3 +156,10 @@ export async function getNoticesByIds(ids: string[]): Promise<Notice[]> {
   if (error) throw new Error('공지를 불러오지 못했습니다.');
   return (data as unknown as NoticeRow[]).map(fromRow);
 }
+
+/** 앱 정보 화면용: 공지 마지막 저장 시각 */
+export async function getNoticesLastUpdatedAt(): Promise<string | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  const { data } = await supabase.from('notices').select('updated_at').order('updated_at', { ascending: false }).limit(1);
+  return (data?.[0]?.updated_at as string | undefined) ?? null;
+}

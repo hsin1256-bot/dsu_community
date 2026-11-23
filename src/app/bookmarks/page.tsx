@@ -42,7 +42,7 @@ export default function BookmarksPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col pb-6">
-      <Header showBack title="보관함 (스크랩)" />
+      <Header showBack title="보관함" />
 
       <div className="p-4 flex-1">
         <div className="flex items-center justify-between text-xs text-slate-500 mb-3 px-1">
