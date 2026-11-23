@@ -99,7 +99,9 @@ export async function crawlLatestGvMenuImage(): Promise<{
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     },
-    cache: 'no-store',
+    // 식단표는 주 1회 바뀌므로 1시간 캐시 (요청마다 학교 사이트를 호출하지 않도록)
+    next: { revalidate: 3600 },
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!res.ok) {

@@ -15,14 +15,22 @@ export function sanitizeNoticeHtml(dirtyHtml: string): string {
       'img', 'a', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
       'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'hr'
     ],
+    // style 속성 차단 (CSS expression, background:url(javascript:...) 방지)
     allowedAttributes: {
       'a': ['href', 'target', 'rel', 'class'],
       'img': ['src', 'alt', 'class', 'loading'],
       'table': ['class'],
-      'th': ['colspan', 'rowspan', 'class'],
-      'td': ['colspan', 'rowspan', 'class'],
-      '*': ['class'], // style 속성 차단 (CSS expression, background:url(javascript:...) 방지)
+      'th': ['colspan', 'rowspan'],
+      'td': ['colspan', 'rowspan'],
     },
+    // class 는 크롤러가 직접 붙이는 것만 허용 (원문에 'fixed inset-0 z-50' 같은 클래스를 넣어
+    // 앱 화면 전체를 덮는 가짜 버튼/오버레이를 만드는 것을 방지)
+    allowedClasses: {
+      img: ['max-w-full', 'h-auto', 'rounded-xl', 'my-3', 'mx-auto', 'block'],
+      table: ['w-full', 'border-collapse', 'my-3', 'text-xs'],
+      a: [],
+    },
+    allowedSchemesByTag: { img: ['http', 'https'] },
     allowedSchemes: ['http', 'https', 'mailto', 'tel'],
     transformTags: {
       'a': (tagName, attribs) => {

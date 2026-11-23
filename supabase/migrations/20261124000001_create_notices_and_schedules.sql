@@ -100,8 +100,8 @@ create trigger trg_notices_updated_at
   for each row execute function public.set_updated_at();
 
 -- 4. 권한 / RLS: 읽기만 공개, 쓰기는 service_role 전용 -------------------------
-revoke insert, update, delete on table public.notices from anon, authenticated;
-revoke insert, update, delete on table public.academic_schedules from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on table public.notices from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on table public.academic_schedules from anon, authenticated;
 grant select on table public.notices to anon, authenticated;
 grant select on table public.academic_schedules to anon, authenticated;
 

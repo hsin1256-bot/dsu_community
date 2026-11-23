@@ -5,7 +5,8 @@ import {
   reportMealReview,
   updateOwnMealReview,
   deleteOwnMealReview,
-} from '@/lib/supabase';
+  isOwnReviewPhotoUrl,
+} from '@/lib/db/cafeteria';
 import { getCurrentUser } from '@/lib/current-user';
 import { RestaurantType } from '@/types';
 import { todayKST } from '@/lib/date-kst';
@@ -39,82 +40,82 @@ export async function GET(req: NextRequest) {
   }
 }
 
+const RESTAURANTS: RestaurantType[] = ['글빌 식당', '스플 식당', '경영 식당'];
+const LIMITS = { comment: 500, nickname: 20, menuName: 100, reason: 300 };
+
+const isNonEmptyString = (v: unknown, max: number): v is string =>
+  typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { menuId, restaurant, menuName, nickname, date, email, rating, comment, photoUrl } = body;
+    const body = await req.json().catch(() => ({}));
+    const { menuId, restaurant, menuName, nickname, rating, comment, photoUrl } = body ?? {};
+    const ratingNum = Number(rating);
 
-    if (!rating || rating < 1 || rating > 5) {
+    if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
       return NextResponse.json({ success: false, error: '1~5점 사이의 별점을 입력해 주세요.' }, { status: 400 });
     }
-
-    if (!comment || comment.trim().length < 2) {
-      return NextResponse.json({ success: false, error: '최소 2자 이상의 리뷰를 입력해 주세요.' }, { status: 400 });
+    if (typeof comment !== 'string' || comment.trim().length < 2 || comment.length > LIMITS.comment) {
+      return NextResponse.json(
+        { success: false, error: `리뷰는 2자 이상 ${LIMITS.comment}자 이하로 입력해 주세요.` },
+        { status: 400 }
+      );
+    }
+    if (!isNonEmptyString(menuId, 64) || !RESTAURANTS.includes(restaurant)) {
+      return NextResponse.json({ success: false, error: '메뉴 정보가 올바르지 않습니다.' }, { status: 400 });
+    }
+    if (nickname !== undefined && nickname !== '' && !isNonEmptyString(nickname, LIMITS.nickname)) {
+      return NextResponse.json(
+        { success: false, error: `닉네임은 ${LIMITS.nickname}자 이하로 입력해 주세요.` },
+        { status: 400 }
+      );
+    }
+    // 사진은 우리 /upload API 로 올린 Storage 주소만 허용 (외부 추적 이미지·data: URL 차단)
+    if (photoUrl && (typeof photoUrl !== 'string' || !isOwnReviewPhotoUrl(photoUrl))) {
+      return NextResponse.json({ success: false, error: '사진은 앱에서 업로드한 이미지만 첨부할 수 있습니다.' }, { status: 400 });
     }
 
-    // DB 용량 보호: base64(data:) 직접 저장 차단, http(s) URL만 허용
-    if (photoUrl) {
-      if (typeof photoUrl !== 'string' || photoUrl.trim().toLowerCase().startsWith('data:')) {
-        return NextResponse.json(
-          { success: false, error: '사진은 Storage 업로드 후 URL 주소만 저장할 수 있습니다.' },
-          { status: 400 }
-        );
-      }
-      if (!/^https?:\/\//i.test(photoUrl.trim())) {
-        return NextResponse.json(
-          { success: false, error: '올바른 이미지 URL 형식이 아닙니다.' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // 단일 진입점(getCurrentUser)으로 현재 로그인 사용자 조회 (비로그인 시 userId: null)
+    // 이메일 등 사용자 정보는 요청 본문이 아니라 검증된 로그인 토큰에서만 가져옴
     const currentUser = await getCurrentUser(req);
-    const resolvedNickname =
-      (nickname && nickname.trim()) || currentUser.nickname || '동서대 학우';
-    const resolvedEmail = email || currentUser.email || undefined;
-    const masked = maskDongseoEmail(resolvedEmail, resolvedNickname);
+    const resolvedNickname = (typeof nickname === 'string' && nickname.trim()) || currentUser.nickname || '동서대 학우';
+    const masked = maskDongseoEmail(currentUser.email || undefined, resolvedNickname);
 
     const created = await addMealReview({
       userId: currentUser.id,
-      menuId: menuId || 'general',
-      restaurant: (restaurant || '글빌 식당') as RestaurantType,
-      menuName: menuName || '',
+      menuId: menuId.trim(),
+      restaurant,
+      menuName: typeof menuName === 'string' ? menuName.slice(0, LIMITS.menuName) : '',
       nickname: resolvedNickname,
-      date: date || todayKST(),
+      date: todayKST(), // 작성일은 서버가 정함
       studentEmailMasked: masked,
-      rating: Number(rating),
+      rating: ratingNum,
       comment: comment.trim(),
       photoUrl: photoUrl || undefined,
     });
 
     return NextResponse.json({ success: true, data: created });
   } catch (error) {
-    return NextResponse.json({ success: false, error: '리뷰 등록 중 문제가 발생했습니다.' }, { status: 500 });
+    console.error('[reviews POST]', error);
+    const message = error instanceof Error && error.message === '존재하지 않는 메뉴입니다.' ? error.message : '리뷰 등록 중 문제가 발생했습니다.';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { reviewId, reason } = body;
+    const body = await req.json().catch(() => ({}));
+    const { reviewId, reason } = body ?? {};
 
-    if (!reviewId) {
+    if (!isNonEmptyString(reviewId, 64)) {
       return NextResponse.json({ success: false, error: '리뷰 ID가 필요합니다.' }, { status: 400 });
+    }
+    const reasonText = typeof reason === 'string' && reason.trim().length >= 2 ? reason.trim() : '부적절한 리뷰';
+    if (reasonText.length > LIMITS.reason) {
+      return NextResponse.json({ success: false, error: `신고 사유는 ${LIMITS.reason}자 이하로 입력해 주세요.` }, { status: 400 });
     }
 
     const currentUser = await getCurrentUser(req);
-    const authHeader = req.headers.get('authorization');
-    const accessToken = authHeader?.toLowerCase().startsWith('bearer ')
-      ? authHeader.slice(7).trim()
-      : null;
-
-    await reportMealReview(
-      reviewId,
-      reason || '부적절한 리뷰',
-      currentUser.id,
-      accessToken
-    );
+    await reportMealReview(reviewId, reasonText, currentUser.id);
     return NextResponse.json({ success: true, message: '신고가 정상적으로 접수되었습니다.' });
   } catch (error: any) {
     return NextResponse.json(
@@ -141,7 +142,15 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json();
     const { reviewId, rating, comment } = body;
-    if (!reviewId || !rating || rating < 1 || rating > 5 || !comment || comment.trim().length < 2) {
+    if (
+      !isNonEmptyString(reviewId, 64) ||
+      !Number.isInteger(Number(rating)) ||
+      Number(rating) < 1 ||
+      Number(rating) > 5 ||
+      typeof comment !== 'string' ||
+      comment.trim().length < 2 ||
+      comment.length > LIMITS.comment
+    ) {
       return NextResponse.json(
         { success: false, error: '수정할 리뷰 ID, 별점(1~5), 내용(2자 이상)이 필요합니다.' },
         { status: 400 }

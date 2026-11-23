@@ -1,7 +1,8 @@
 import { CafeteriaMenu, MealReview, RestaurantType } from '@/types';
 import { INITIAL_CAFETERIA_MENUS, INITIAL_MEAL_REVIEWS } from '@/lib/cafeteria-seed';
 import { readGvWeeklyMenuTxt } from '@/lib/gv-menu-txt';
-import { supabase, isSupabaseConfigured, createAuthedClient } from '@/lib/supabase-client';
+import { randomUUID } from 'crypto';
+import { supabase, isSupabaseConfigured, createAuthedClient, getSupabaseAdmin } from '@/lib/supabase-client';
 
 export const REVIEW_PHOTOS_BUCKET = 'review-photos';
 
@@ -159,7 +160,8 @@ export async function getMealReviews(
     let query = supabase
       .from('meal_reviews')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(500); // 리뷰가 쌓여도 한 번에 전체 테이블을 읽지 않도록 상한
 
     if (restaurant) query = query.eq('restaurant', restaurant);
     if (menuId && !menuName) query = query.eq('menu_id', menuId);
@@ -192,14 +194,20 @@ export async function getMealReviews(
   return filtered;
 }
 
+/**
+ * 리뷰 저장: 서버 API 가 입력을 검증한 뒤 service role 로만 저장합니다.
+ * (DB 에서는 anon/authenticated 의 직접 INSERT 를 막아 두었음 → migration 20261124000002)
+ */
 export async function addMealReview(
   review: Omit<MealReview, 'id' | 'createdAt'>
 ): Promise<MealReview> {
   assertServerOnlyWrite('addMealReview');
-  const reviewId = `rev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const reviewId = `rev-${randomUUID()}`;
 
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase
+  if (isSupabaseConfigured) {
+    const admin = getSupabaseAdmin();
+    if (!admin) throw new Error('SUPABASE_SERVICE_ROLE_KEY 가 없어 리뷰를 저장할 수 없습니다.');
+    const { data, error } = await admin
       .from('meal_reviews')
       .insert([
         {
@@ -221,7 +229,8 @@ export async function addMealReview(
 
     if (error) {
       console.error('[Supabase] meal_reviews insert error:', error.message);
-      throw new Error(`Supabase 리뷰 저장 실패: ${error.message}`);
+      if (error.code === '23503') throw new Error('존재하지 않는 메뉴입니다.');
+      throw new Error('리뷰 저장에 실패했습니다.');
     }
     return fromReviewRow(data as MealReviewRow);
   }
@@ -235,38 +244,32 @@ export async function addMealReview(
   return newReview;
 }
 
+/** 신고 접수: 서버가 확인한 사용자 id 로 service role 저장 (직접 INSERT 차단) */
 export async function reportMealReview(
   reviewId: string,
   reason: string,
-  reporterUserId?: string | null,
-  accessToken?: string | null
+  reporterUserId?: string | null
 ): Promise<boolean> {
   assertServerOnlyWrite('reportMealReview');
   if (isSupabaseConfigured) {
-    // 로그인 토큰이 있으면 인증 클라이언트로(auth.uid() = reporter_user_id 검증), 없으면 anon으로 INSERT 전용 호출
-    const client = accessToken
-      ? createAuthedClient(accessToken)
-      : supabase;
+    const admin = getSupabaseAdmin();
+    if (!admin) throw new Error('SUPABASE_SERVICE_ROLE_KEY 가 없어 신고를 저장할 수 없습니다.');
+    const { error } = await admin.from('review_reports').insert([
+      {
+        review_id: reviewId,
+        reporter_user_id: reporterUserId ?? null,
+        reason: reason.trim(),
+        status: 'pending',
+      },
+    ]);
 
-    if (client) {
-      const { error } = await client.from('review_reports').insert([
-        {
-          review_id: reviewId,
-          reporter_user_id: reporterUserId ?? null,
-          reason: reason.trim(),
-          status: 'pending',
-        },
-      ]);
-
-      if (error) {
-        if (error.code === '23505') {
-          throw new Error('이미 신고하신 리뷰입니다.');
-        }
-        console.error('[Supabase] review_reports insert error:', error.message);
-        throw new Error(`신고 접수 실패: ${error.message}`);
-      }
-      return true;
+    if (error) {
+      if (error.code === '23505') throw new Error('이미 신고하신 리뷰입니다.');
+      if (error.code === '23503') throw new Error('존재하지 않는 리뷰입니다.');
+      console.error('[Supabase] review_reports insert error:', error.message);
+      throw new Error('신고 접수에 실패했습니다.');
     }
+    return true;
   }
 
   const target = fallbackReviews.find((r) => r.id === reviewId);
@@ -300,7 +303,7 @@ export async function updateOwnMealReview(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || '본인이 작성한 리뷰만 수정할 수 있습니다.');
+    throw new Error('본인이 작성한 리뷰만 수정할 수 있습니다.');
   }
   return fromReviewRow(data as MealReviewRow);
 }
@@ -316,61 +319,49 @@ export async function deleteOwnMealReview(
   const authedClient = createAuthedClient(accessToken);
 
   if (!authedClient) throw new Error('Supabase가 설정되지 않았습니다.');
-  const { error } = await authedClient
+  const { data, error } = await authedClient
     .from('meal_reviews')
     .delete()
-    .eq('id', reviewId);
+    .eq('id', reviewId)
+    .select('id');
 
-  if (error) {
-    throw new Error(error.message || '본인이 작성한 리뷰만 삭제할 수 있습니다.');
+  // RLS 로 막히면 오류 없이 0건 삭제되므로 결과 건수까지 확인
+  if (error || !data || data.length === 0) {
+    throw new Error('본인이 작성한 리뷰만 삭제할 수 있습니다.');
   }
   return true;
 }
 
+/** 리뷰 사진 업로드: 서버가 파일 내용을 검사한 뒤 service role 로만 업로드 (Storage 직접 업로드 차단) */
 export async function uploadReviewPhoto(
   fileBuffer: Buffer,
-  mimeType: string,
-  originalName: string,
-  accessToken?: string | null
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
 ): Promise<string> {
   assertServerOnlyWrite('uploadReviewPhoto');
+  const admin = getSupabaseAdmin();
+  if (!admin) throw new Error('Supabase Storage 가 설정되지 않았습니다.');
 
-  if (!isSupabaseConfigured) {
-    throw new Error('Supabase Storage가 설정되지 않았습니다.');
-  }
-
-  const client = accessToken
-    ? createAuthedClient(accessToken)
-    : supabase;
-
-  if (!client) {
-    throw new Error('Supabase 클라이언트를 초기화할 수 없습니다.');
-  }
-
-  const extMap: Record<string, string> = {
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp',
-    'image/gif': 'gif',
-  };
-  const ext = extMap[mimeType] || originalName.split('.').pop()?.toLowerCase() || 'jpg';
+  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }[mimeType];
   const monthPrefix = new Date().toISOString().slice(0, 7); // YYYY-MM
-  const randomId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  const objectPath = `reviews/${monthPrefix}/${randomId}.${ext}`;
+  const objectPath = `reviews/${monthPrefix}/${randomUUID()}.${ext}`;
 
-  const { error: uploadError } = await client.storage
+  const { error: uploadError } = await admin.storage
     .from(REVIEW_PHOTOS_BUCKET)
-    .upload(objectPath, fileBuffer, {
-      contentType: mimeType,
-      cacheControl: '3600',
-      upsert: false,
-    });
+    .upload(objectPath, fileBuffer, { contentType: mimeType, cacheControl: '3600', upsert: false });
 
   if (uploadError) {
     console.error('[Supabase Storage] upload error:', uploadError.message);
-    throw new Error(`스토리지 업로드 실패: ${uploadError.message}`);
+    throw new Error('사진 업로드에 실패했습니다.');
   }
 
-  const { data } = client.storage.from(REVIEW_PHOTOS_BUCKET).getPublicUrl(objectPath);
+  const { data } = admin.storage.from(REVIEW_PHOTOS_BUCKET).getPublicUrl(objectPath);
   return data.publicUrl;
+}
+
+/** 우리 Storage 버킷의 공개 URL 인지 확인 (외부 이미지 주소를 리뷰에 넣지 못하게) */
+export function isOwnReviewPhotoUrl(url: string): boolean {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  if (!base) return false;
+  const prefix = `${base.replace(/\/$/, '')}/storage/v1/object/public/${REVIEW_PHOTOS_BUCKET}/reviews/`;
+  return url.startsWith(prefix) && !url.includes('..');
 }

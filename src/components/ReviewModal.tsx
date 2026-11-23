@@ -181,6 +181,10 @@ export default function ReviewModal({
 
     const submitMenu =
       menu || availableMenus.find((m) => m.id === selectedMenuId) || availableMenus[0];
+    if (!submitMenu) {
+      setErrorMsg('리뷰할 메뉴를 선택해주세요.');
+      return;
+    }
 
     setLoading(true);
 
@@ -191,8 +195,8 @@ export default function ReviewModal({
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           restaurant,
-          menuId: submitMenu?.id || 'general',
-          menuName: submitMenu?.name || displayMenuName,
+          menuId: submitMenu.id,
+          menuName: submitMenu.name || displayMenuName,
           nickname: nickname.trim() || '동서대 익명 학우',
           rating,
           comment: comment.trim(),
@@ -464,6 +468,7 @@ export default function ReviewModal({
                       type="text"
                       placeholder="닉네임 (ex: 이승민)"
                       value={nickname}
+                      maxLength={20}
                       onChange={(e) => setNickname(e.target.value)}
                       className="w-full text-xs bg-transparent focus:outline-none text-slate-800 placeholder-slate-400 font-medium"
                     />
@@ -587,6 +592,7 @@ export default function ReviewModal({
                 <textarea
                   rows={3}
                   value={comment}
+                  maxLength={500}
                   onChange={(e) => setComment(e.target.value)}
                   placeholder="학우들을 위한 솔직한 한줄 리뷰를 남겨주세요"
                   className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-dongseo-700 focus:border-transparent font-medium resize-none"
