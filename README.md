@@ -67,9 +67,12 @@ npm run sync:local -- schedules # 학사일정만
 배포 환경에서는 GitHub Actions가 자동으로 실행합니다 (공지: 평일 9~18시 매시, 학사일정: 매일 03:30).
 
 ### 자주 묻는 문제
+**먼저 http://localhost:3000/api/health 를 열어 보세요.** 어느 Supabase 프로젝트에 연결됐는지, 테이블별 데이터 수, 문제 원인을 알려줍니다 (개발 서버에서만 동작).
+
 | 증상 | 원인 / 해결 |
 |---|---|
-| 공지·캘린더가 비어 있음 | 아직 동기화를 안 함 → 5번 실행 |
+| 공지는 나오는데 캘린더만 비어 있음 | 예전 개인 Supabase 주소가 `.env.local`에 남아 있음 → 팀 공용 `dsu_community` URL·키로 교체 |
+| 공지·캘린더가 비어 있음 | 아직 동기화를 안 함 → 서버 키가 있는 사람이 5번 실행 |
 | 동기화가 `503` | `SUPABASE_SERVICE_ROLE_KEY` 없음 |
 | 동기화가 `401` | `CRON_SECRET`이 `.env.local`과 다름 |
 | 리뷰 저장이 실패 | `SUPABASE_SERVICE_ROLE_KEY` 없음, 또는 메뉴를 선택하지 않음 |

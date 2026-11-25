@@ -49,6 +49,8 @@ export default function SchedulePage() {
   const [syncToast, setSyncToast] = useState<string | null>(null);
   const [buttonCooldown, setButtonCooldown] = useState(0);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  // 학사일정이 안 보일 때 원인 안내 (null = 정상)
+  const [loadIssue, setLoadIssue] = useState<'empty' | 'error' | null>(null);
 
   // 선택된 특정 날짜
   const [selectedDateStr, setSelectedDateStr] = useState<string>(() => formatDate(new Date()));
@@ -82,10 +84,12 @@ export default function SchedulePage() {
       if (!res.ok || !json.success) throw new Error(json.error || '학사일정을 불러오지 못했습니다.');
       // 응답이 비어 있어도 기존 화면을 지우지 않음
       if (json.data.length > 0) setAcademicSchedules(json.data);
+      setLoadIssue(json.data.length > 0 ? null : 'empty');
       setLastSyncedAt(json.syncedAt);
       if (manual) showToast(json.syncedAt ? `학사일정 업데이트: ${formatSyncedAt(json.syncedAt)}` : '학사일정을 다시 불러왔습니다.');
     } catch (err) {
       console.error(err);
+      setLoadIssue('error');
       showToast('학사일정을 불러오지 못했습니다. 저장된 개인 일정만 표시합니다.');
     } finally {
       setLoading(false);
@@ -309,6 +313,19 @@ export default function SchedulePage() {
           </div>
         ) : (
           <div className="flex-1 flex flex-col px-3 pt-2 pb-1 overflow-hidden">
+            {loadIssue && academicSchedules.length === 0 && (
+              <div role="status" className="mb-2 text-[11px] leading-relaxed bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2">
+                {loadIssue === 'error' ? '학사일정을 불러오지 못했어요.' : '학사일정 데이터가 아직 없어요.'} 개인 일정은 그대로 볼 수 있어요.
+                {process.env.NODE_ENV !== 'production' && (
+                  <>
+                    {' '}
+                    <a href="/api/health" target="_blank" rel="noreferrer" className="font-bold underline">
+                      DB 연결 확인하기
+                    </a>
+                  </>
+                )}
+              </div>
+            )}
             <CalendarGrid
               monthData={currentMonthData}
               selectedDateStr={selectedDateStr}
