@@ -7,7 +7,6 @@ import {
 } from '@/lib/supabase-client';
 import { CafeteriaMenu, MealReview, RestaurantType } from '@/types';
 import { INITIAL_CAFETERIA_MENUS, INITIAL_MEAL_REVIEWS } from '@/lib/cafeteria-seed';
-import { readGvWeeklyMenuTxt } from '@/lib/gv-menu-txt';
 
 export { supabase, isSupabaseConfigured };
 
@@ -107,14 +106,8 @@ function attachReviewStats(menus: CafeteriaMenu[], reviews: MealReview[]): Cafet
 let fallbackReviews: MealReview[] = [...INITIAL_MEAL_REVIEWS];
 
 function getFallbackMenus(restaurant?: string, category?: string): CafeteriaMenu[] {
-  let menus: CafeteriaMenu[] = [];
-  if (restaurant === '글빌 식당') {
-    const { menus: gvMenus } = readGvWeeklyMenuTxt();
-    menus = gvMenus.length > 0 ? gvMenus : INITIAL_CAFETERIA_MENUS.filter((m) => m.restaurant === '글빌 식당');
-  } else {
-    menus = [...INITIAL_CAFETERIA_MENUS];
-    if (restaurant) menus = menus.filter((m) => m.restaurant === restaurant);
-  }
+  let menus: CafeteriaMenu[] = [...INITIAL_CAFETERIA_MENUS];
+  if (restaurant) menus = menus.filter((m) => m.restaurant === restaurant);
   if (category && category !== '전체') {
     menus = menus.filter((m) => m.category === category);
   }

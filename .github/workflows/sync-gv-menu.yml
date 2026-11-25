@@ -1,0 +1,43 @@
+name: Sync Global Village Weekly Menu
+
+on:
+  schedule:
+    # 매주 금요일 KST 12:30, 14:00, 15:30 (UTC 03:30, 05:00, 06:30) 자동 크롤링
+    - cron: '30 3 * * 5'
+    - cron: '0 5 * * 5'
+    - cron: '30 6 * * 5'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '이미지가 같아도 강제로 다시 파싱 및 DB 업데이트'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  sync-gv-menu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Crawl GV menu image and update Supabase DB directly
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            node scripts/crawl-gv-menu.mjs --force
+          else
+            node scripts/crawl-gv-menu.mjs
+          fi
