@@ -1,16 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
+import {
+  supabase,
+  supabaseUrl,
+  supabaseAnonKey,
+  isSupabaseConfigured,
+} from '@/lib/supabase-client';
 import { CafeteriaMenu, MealReview, RestaurantType } from '@/types';
 import { INITIAL_CAFETERIA_MENUS, INITIAL_MEAL_REVIEWS } from '@/lib/cafeteria-seed';
 import { readGvWeeklyMenuTxt } from '@/lib/gv-menu-txt';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
-
-export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+export { supabase, isSupabaseConfigured };
 
 export const REVIEW_PHOTOS_BUCKET = 'review-photos';
 

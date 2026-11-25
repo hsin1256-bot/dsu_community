@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase-client';
 
 /**
  * 앱 전역에서 "현재 사용자" 정보를 일관되게 조회하기 위한 단일 진입점.
