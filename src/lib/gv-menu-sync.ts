@@ -152,12 +152,36 @@ export async function parseGvMenuImageWithGemini(imageUrl: string): Promise<Pars
     },
   });
 
-  const models = ['gemini-3.8-flash', 'gemini-3.8-flash-lite'];
+  const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3-flash-preview'];
+  try {
+    const listRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+    );
+    if (listRes.ok) {
+      const listJson = await listRes.json();
+      const discovered: string[] = (listJson.models || [])
+        .filter(
+          (m: any) =>
+            Array.isArray(m.supportedGenerationMethods) &&
+            m.supportedGenerationMethods.includes('generateContent') &&
+            typeof m.name === 'string' &&
+            /gemini.*flash/i.test(m.name) &&
+            !/tts|image|audio|thinking|live|embedding/i.test(m.name)
+        )
+        .map((m: any) => m.name.replace(/^models\//, ''));
+      for (const dm of discovered) {
+        if (!candidateModels.includes(dm)) candidateModels.push(dm);
+      }
+    }
+  } catch {
+    // fallback to default list
+  }
+
   let rawText: string | undefined;
   let lastErr = '';
 
-  for (const model of models) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+  for (const model of candidateModels.slice(0, 6)) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       const geminiRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
         {
@@ -176,7 +200,7 @@ export async function parseGvMenuImageWithGemini(imageUrl: string): Promise<Pars
       const errText = await geminiRes.text();
       lastErr = `${model} HTTP ${geminiRes.status}: ${errText.slice(0, 200)}`;
       if (geminiRes.status === 503 || geminiRes.status === 429) {
-        await new Promise((r) => setTimeout(r, attempt * 3000));
+        await new Promise((r) => setTimeout(r, attempt * 2500));
         continue;
       }
       break;

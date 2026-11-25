@@ -93,11 +93,38 @@ async function parseMenuImage(imageUrl) {
     },
   });
 
-  const models = ['gemini-3.8-flash', 'gemini-3.8-flash-lite'];
+  // 우선순위 모델 목록 + 실패 시 사용 가능한 Gemini 모델 동적 탐색
+  const preferredModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3-flash-preview'];
+  let candidateModels = [...preferredModels];
+  try {
+    const listRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiApiKey)}`
+    );
+    if (listRes.ok) {
+      const listJson = await listRes.json();
+      const discovered = (listJson.models || [])
+        .filter(
+          (m) =>
+            Array.isArray(m.supportedGenerationMethods) &&
+            m.supportedGenerationMethods.includes('generateContent') &&
+            typeof m.name === 'string' &&
+            /gemini.*flash/i.test(m.name) &&
+            !/tts|image|audio|thinking|live|embedding/i.test(m.name)
+        )
+        .map((m) => m.name.replace(/^models\//, ''));
+      for (const dm of discovered) {
+        if (!candidateModels.includes(dm)) candidateModels.push(dm);
+      }
+      console.log('[GV-Sync] 후보 모델 목록:', candidateModels.slice(0, 6).join(', '));
+    }
+  } catch {
+    // 모델 목록 조회 실패 시 기본 목록 사용
+  }
+
   let lastErr = '';
 
-  for (const model of models) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+  for (const model of candidateModels.slice(0, 6)) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       const geminiRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
         {
@@ -108,6 +135,7 @@ async function parseMenuImage(imageUrl) {
       );
 
       if (geminiRes.ok) {
+        console.log(`[GV-Sync] ${model} 모델로 이미지 파싱 성공!`);
         const json = await geminiRes.json();
         const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error('Gemini 응답에서 JSON을 추출할 수 없습니다.');
@@ -116,10 +144,10 @@ async function parseMenuImage(imageUrl) {
 
       const errBody = await geminiRes.text();
       lastErr = `${model} HTTP ${geminiRes.status}: ${errBody.slice(0, 200)}`;
-      console.warn(`[GV-Sync] ${model} 시도 ${attempt}/3 실패 (HTTP ${geminiRes.status})`);
+      console.warn(`[GV-Sync] ${model} 시도 ${attempt}/2 실패 (HTTP ${geminiRes.status})`);
 
       if (geminiRes.status === 503 || geminiRes.status === 429) {
-        await new Promise((r) => setTimeout(r, attempt * 3000));
+        await new Promise((r) => setTimeout(r, attempt * 2500));
         continue;
       }
       break;
