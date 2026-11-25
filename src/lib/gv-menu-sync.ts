@@ -132,42 +132,60 @@ export async function parseGvMenuImageWithGemini(imageUrl: string): Promise<Pars
   ]
 }`;
 
-  const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
+  const bodyStr = JSON.stringify({
+    contents: [
+      {
+        parts: [
+          { text: prompt },
           {
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType,
-                  data: base64Image,
-                },
-              },
-            ],
+            inlineData: {
+              mimeType,
+              data: base64Image,
+            },
           },
         ],
-        generationConfig: {
-          temperature: 0,
-          responseMimeType: 'application/json',
-        },
-      }),
-    }
-  );
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: 'application/json',
+    },
+  });
 
-  if (!geminiRes.ok) {
-    const errText = await geminiRes.text();
-    throw new Error(`Gemini Vision 파싱 실패 (HTTP ${geminiRes.status}): ${errText.slice(0, 200)}`);
+  const models = ['gemini-3.8-flash', 'gemini-3.8-flash-lite'];
+  let rawText: string | undefined;
+  let lastErr = '';
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: bodyStr,
+        }
+      );
+
+      if (geminiRes.ok) {
+        const geminiJson = await geminiRes.json();
+        rawText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+        break;
+      }
+
+      const errText = await geminiRes.text();
+      lastErr = `${model} HTTP ${geminiRes.status}: ${errText.slice(0, 200)}`;
+      if (geminiRes.status === 503 || geminiRes.status === 429) {
+        await new Promise((r) => setTimeout(r, attempt * 3000));
+        continue;
+      }
+      break;
+    }
+    if (rawText) break;
   }
 
-  const geminiJson = await geminiRes.json();
-  const rawText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!rawText) {
-    throw new Error('Gemini Vision 응답에서 식단 JSON을 찾을 수 없습니다.');
+    throw new Error(`Gemini Vision 파싱 실패: ${lastErr || '응답 없음'}`);
   }
 
   const parsed = JSON.parse(rawText) as ParsedGvWeeklyMenu;

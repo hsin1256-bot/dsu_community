@@ -78,37 +78,55 @@ async function parseMenuImage(imageUrl) {
   ]
 }`;
 
-  const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType, data: base64Image } },
-            ],
-          },
+  const bodyStr = JSON.stringify({
+    contents: [
+      {
+        parts: [
+          { text: prompt },
+          { inlineData: { mimeType, data: base64Image } },
         ],
-        generationConfig: {
-          temperature: 0,
-          responseMimeType: 'application/json',
-        },
-      }),
-    }
-  );
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: 'application/json',
+    },
+  });
 
-  if (!geminiRes.ok) {
-    throw new Error(`Gemini API 오류 (HTTP ${geminiRes.status}): ${await geminiRes.text()}`);
+  const models = ['gemini-3.8-flash', 'gemini-3.8-flash-lite'];
+  let lastErr = '';
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: bodyStr,
+        }
+      );
+
+      if (geminiRes.ok) {
+        const json = await geminiRes.json();
+        const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('Gemini 응답에서 JSON을 추출할 수 없습니다.');
+        return JSON.parse(text);
+      }
+
+      const errBody = await geminiRes.text();
+      lastErr = `${model} HTTP ${geminiRes.status}: ${errBody.slice(0, 200)}`;
+      console.warn(`[GV-Sync] ${model} 시도 ${attempt}/3 실패 (HTTP ${geminiRes.status})`);
+
+      if (geminiRes.status === 503 || geminiRes.status === 429) {
+        await new Promise((r) => setTimeout(r, attempt * 3000));
+        continue;
+      }
+      break;
+    }
   }
 
-  const json = await geminiRes.json();
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini 응답에서 JSON을 추출할 수 없습니다.');
-
-  return JSON.parse(text);
+  throw new Error(`Gemini API 오류: ${lastErr}`);
 }
 
 async function main() {
