@@ -29,10 +29,10 @@ export const DSU_RESTAURANTS: BuildingInfo[] = [
   {
     id: '글빌 식당',
     name: '글로벌빌리지 식당',
-    buildingName: '글로벌빌리지 (23번 건물)',
+    buildingName: '글로벌빌리지 동관 (23번 건물)',
     floor: '지상 4층',
-    lat: 35.14655,
-    lng: 129.00760,
+    lat: 35.146088,
+    lng: 129.007310,
   },
   {
     id: '스플 식당',

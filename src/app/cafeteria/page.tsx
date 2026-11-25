@@ -28,9 +28,9 @@ const CafeteriaMap = dynamic(() => import('@/components/CafeteriaMap'), {
   ),
 });
 
-// 와이어프레임 지정 3대 식당 (글빌 식당이 첫 페이지/기본)
+// 동서대학교 3대 식당
 const RESTAURANTS: { id: RestaurantType; label: string; badge?: string }[] = [
-  { id: '글빌 식당', label: '글빌 식당', badge: '첫 페이지' },
+  { id: '글빌 식당', label: '글빌 식당' },
   { id: '스플 식당', label: '스플 식당' },
   { id: '경영 식당', label: '경영 식당' },
 ];
