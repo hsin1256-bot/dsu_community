@@ -185,17 +185,11 @@ export default function CafeteriaPage() {
 
       {/* 학식 페이지 본문 (스크롤 기능 포함, 화이트&버건디) */}
       <div className="p-4 space-y-4 max-w-[480px] mx-auto w-full">
-        {/* ===================== 1. 각 식당 별 지도 이미지 (식당 클릭 시 이동) ===================== */}
+        {/* ===================== 1. 각 식당 별 지도 이미지 ===================== */}
         <section>
           <CafeteriaMap
             selectedRestaurant={selectedRestaurant}
-            onSelectRestaurant={(rest) => {
-              setSelectedRestaurant(rest);
-              document.getElementById('restaurant-menu-section')?.scrollIntoView({
-                behavior: 'smooth',
-                block: 'start',
-              });
-            }}
+            onSelectRestaurant={(rest) => setSelectedRestaurant(rest)}
           />
         </section>
 
