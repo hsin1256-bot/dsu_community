@@ -6,6 +6,12 @@ on:
     - cron: '30 3 * * 5'
     - cron: '0 5 * * 5'
     - cron: '30 6 * * 5'
+  push:
+    branches:
+      - cafeteria
+    paths:
+      - '.github/workflows/sync-gv-menu.yml'
+      - 'scripts/crawl-gv-menu.mjs'
   workflow_dispatch:
     inputs:
       force:
