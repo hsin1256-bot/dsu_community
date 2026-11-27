@@ -3,7 +3,8 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { MonthData, CustomSchedule, WEEKDAYS } from '../types';
-import { getScheduleColor, getScheduleEmoji, formatDate } from '../utils';
+import { getScheduleColor, getScheduleKind, getScheduleKindLabel, formatDate } from '../utils';
+import ScheduleTypeIcon from './ScheduleTypeIcon';
 
 interface CalendarGridProps {
   monthData: MonthData;
@@ -76,19 +77,19 @@ export default function CalendarGrid({
         </div>
       </div>
 
-      {/* 🏷️ 일정 종류 범례 (북마크 일정, 학사일정, 개인일정) */}
-      <div className="flex items-center justify-center gap-3.5 py-1 px-3 bg-slate-50/90 rounded-xl border border-slate-100 text-[11px] font-bold text-slate-600 mb-1 shrink-0">
-        <span className="flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#007AFF]" />
-          <span>🔖 북마크 일정</span>
+      {/* 🏷️ 일정 종류 범례 (이미지 기반 원형 아이콘: 북마크 일정, 학사일정, 개인일정) */}
+      <div className="flex items-center justify-center gap-4 py-1.5 px-3 bg-slate-50/90 rounded-xl border border-slate-100 text-[11px] font-bold text-slate-700 mb-1 shrink-0">
+        <span className="flex items-center gap-1.5">
+          <ScheduleTypeIcon kind="bookmark" size="sm" />
+          <span>북마크 일정</span>
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />
-          <span>🎓 학사일정</span>
+        <span className="flex items-center gap-1.5">
+          <ScheduleTypeIcon kind="academic" size="sm" />
+          <span>학사일정</span>
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#22C55E]" />
-          <span>👤 개인일정</span>
+        <span className="flex items-center gap-1.5">
+          <ScheduleTypeIcon kind="personal" size="sm" />
+          <span>개인일정</span>
         </span>
       </div>
 
@@ -163,7 +164,7 @@ export default function CalendarGrid({
                           e.stopPropagation();
                           onSelectSchedule(s);
                         }}
-                        className={`w-full mx-0.5 px-1 py-0.5 text-left flex items-center gap-0.5 leading-tight cursor-pointer hover:opacity-100 active:scale-95 transition-transform relative z-0 text-white ${
+                        className={`w-full mx-0.5 px-1 py-0.5 text-left flex items-center gap-1 leading-tight cursor-pointer hover:opacity-100 active:scale-95 transition-transform relative z-0 text-white ${
                           isMiddleDay
                             ? 'h-3.5 text-[9px] font-medium opacity-85 rounded'
                             : 'h-4 text-[10px] font-bold rounded-md opacity-95'
@@ -171,11 +172,9 @@ export default function CalendarGrid({
                         style={{
                           backgroundColor: badgeColor,
                         }}
-                        title={isMiddleDay ? `${getScheduleEmoji(s)} ${s.title} (진행 중)` : `${getScheduleEmoji(s)} ${s.title}`}
+                        title={isMiddleDay ? `[${getScheduleKindLabel(s)}] ${s.title} (진행 중)` : `[${getScheduleKindLabel(s)}] ${s.title}`}
                       >
-                        <span className="shrink-0 text-[9px] leading-none select-none">
-                          {getScheduleEmoji(s)}
-                        </span>
+                        <ScheduleTypeIcon kind={getScheduleKind(s)} size="xs" />
                         <span className="truncate leading-none">
                           {isMiddleDay ? s.title : isEndDay && isMultiDay ? `${s.title} (종료)` : s.title}
                         </span>

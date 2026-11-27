@@ -17,6 +17,7 @@ import {
   BookOpen,
   Bus,
   Layers,
+  GraduationCap,
 } from 'lucide-react';
 
 // 공지·학사일정은 하루 몇 번만 바뀌므로 5분 단위로 다시 생성
@@ -81,7 +82,12 @@ export default async function HomePage() {
                       {formatDDay(daysBetween(today, item.startDate))}
                     </span>
                   </div>
-                  <p className="text-xs font-bold text-white mt-1 truncate">🎓 {item.title}</p>
+                  <p className="text-xs font-bold text-white mt-1 truncate flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 rounded-full bg-[#9A25E2] flex items-center justify-center shrink-0 shadow-2xs">
+                      <GraduationCap className="w-2 h-2 fill-white stroke-white stroke-[2]" />
+                    </span>
+                    <span className="truncate">{item.title}</span>
+                  </p>
                 </Link>
               ))}
             </div>

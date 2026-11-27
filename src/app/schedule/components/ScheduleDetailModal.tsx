@@ -6,7 +6,8 @@ import { X, Calendar, Clock, Edit2, Trash2, BellRing, ExternalLink } from 'lucid
 import { isDdayPinned, toggleDdayPin } from '@/lib/alert-settings';
 import { todayKST, daysBetween } from '@/lib/date-kst';
 import { CustomSchedule } from '../types';
-import { getScheduleColor, getScheduleEmoji, getScheduleKindLabel } from '../utils';
+import { getScheduleColor, getScheduleKind, getScheduleKindLabel } from '../utils';
+import ScheduleTypeIcon from './ScheduleTypeIcon';
 
 interface ScheduleDetailModalProps {
   schedule: CustomSchedule | null;
@@ -43,21 +44,13 @@ export default function ScheduleDetailModal({
         {/* 상단 컬러 포인트 및 닫기 버튼 */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
-            <span
-              className="w-3 h-3 rounded-full"
-              style={{
-                backgroundColor: getScheduleColor(schedule),
-              }}
-            />
-            <span className="text-xs font-bold text-slate-600 flex items-center gap-1">
-              <span>{getScheduleEmoji(schedule)}</span>
-              <span>
-                {isBookmarkNotice
-                  ? '북마크 일정'
-                  : isPersonal
-                  ? '개인일정'
-                  : `학사일정 · ${schedule.category || '공식'}`}
-              </span>
+            <ScheduleTypeIcon kind={getScheduleKind(schedule)} size="md" />
+            <span className="text-xs font-bold text-slate-700">
+              {isBookmarkNotice
+                ? '북마크 일정'
+                : isPersonal
+                ? '개인일정'
+                : `학사일정 · ${schedule.category || '공식'}`}
             </span>
           </div>
           <button
@@ -70,8 +63,8 @@ export default function ScheduleDetailModal({
 
         {/* 일정 제목 */}
         <div>
-          <h3 className="text-base font-extrabold text-slate-900 leading-snug flex items-start gap-1.5">
-            <span className="select-none text-base shrink-0">{getScheduleEmoji(schedule)}</span>
+          <h3 className="text-base font-extrabold text-slate-900 leading-snug flex items-start gap-2">
+            <ScheduleTypeIcon kind={getScheduleKind(schedule)} size="sm" className="mt-0.5" />
             <span>{schedule.title}</span>
           </h3>
         </div>
