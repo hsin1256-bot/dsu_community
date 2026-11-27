@@ -122,11 +122,18 @@ export default function CalendarGrid({
           const hasEvents = cell.schedules.length > 0;
 
           return (
-            <button
+            <div
               key={idx}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => onSelectDate(cell.dateStr)}
-              className={`flex flex-col items-center justify-start pt-1 pb-1 transition-all duration-150 relative ${
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectDate(cell.dateStr);
+                }
+              }}
+              className={`flex flex-col items-center justify-start pt-1 pb-1 transition-all duration-150 relative cursor-pointer select-none ${
                 isSelected
                   ? 'bg-dongseo-700/10 rounded-xl font-bold'
                   : isToday
@@ -209,7 +216,7 @@ export default function CalendarGrid({
                   </button>
                 )}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
