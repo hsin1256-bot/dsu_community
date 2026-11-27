@@ -45,15 +45,15 @@ export function getScheduleKindLabel(schedule: CustomSchedule): string {
 
 // 🎨 유형별 기본 테마 컬러 (업로드된 디자인 기준: 북마크-파랑, 학사-보라, 개인-초록)
 export const KIND_THEME_COLORS = {
-  bookmark: '#007AFF', // 파란색 (북마크 일정)
-  academic: '#8B5CF6', // 보라색 (학사일정)
-  personal: '#22C55E', // 초록색 (개인일정)
+  bookmark: '#0080FF', // 파란색 (북마크 일정)
+  academic: '#9A25E2', // 보라색 (학사일정)
+  personal: '#52C41A', // 초록색 (개인일정)
 };
 
 export const SCHEDULE_COLOR_PALETTE = [
-  '#007AFF', // Blue
-  '#8B5CF6', // Purple
-  '#22C55E', // Green
+  '#0080FF', // Blue
+  '#9A25E2', // Purple
+  '#52C41A', // Green
   '#9E1B32', // Dongseo Burgundy
   '#FF9500', // Orange
   '#00C7BE', // Teal

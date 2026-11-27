@@ -2,23 +2,26 @@
 
 import React from 'react';
 import { Bookmark, GraduationCap, User } from 'lucide-react';
-import { ScheduleKind } from '../utils';
+import { ScheduleKind, KIND_THEME_COLORS } from '../utils';
 
 interface ScheduleTypeIconProps {
   kind: ScheduleKind;
   size?: 'xs' | 'sm' | 'md' | 'lg';
+  bgColor?: string; // 해당 일정의 배경 색상과 100% 동일하게 일치
   className?: string;
 }
 
 /**
  * 🎨 사용자 지정 일정 유형 원형 아이콘 (북마크 일정 🔖, 학사일정 🎓, 개인일정 👤)
- * - 북마크 일정: 파란색 원(#0080FF) + 흰색 북마크 아이콘
- * - 학사일정: 보라색 원(#9A25E2) + 흰색 학사모 아이콘
- * - 개인일정: 초록색 원(#52C41A) + 흰색 사람 아이콘
+ * - 배경 색상: 지정된 일정의 고유 색상(`bgColor`)과 100% 동일하게 일치
+ * - 북마크 일정: 흰색 북마크 아이콘
+ * - 학사일정: 흰색 학사모 아이콘
+ * - 개인일정: 흰색 사람 아이콘
  */
 export default function ScheduleTypeIcon({
   kind,
   size = 'sm',
+  bgColor,
   className = '',
 }: ScheduleTypeIconProps) {
   const sizeClasses = {
@@ -28,10 +31,20 @@ export default function ScheduleTypeIcon({
     lg: { circle: 'w-7 h-7', icon: 'w-4 h-4' },
   }[size];
 
+  // 지정된 bgColor 가 있으면 해당 일정의 색상을 그대로 사용, 없으면 유형 기본 테마색 사용
+  const effectiveBgColor = bgColor || KIND_THEME_COLORS[kind];
+
+  const commonStyle = {
+    backgroundColor: effectiveBgColor,
+  };
+
+  const ringClass = size === 'xs' ? 'ring-[0.5px] ring-white/60' : 'ring-1 ring-white/40 shadow-xs';
+
   if (kind === 'bookmark') {
     return (
       <span
-        className={`rounded-full flex items-center justify-center shrink-0 bg-[#0080FF] text-white shadow-2xs select-none ${sizeClasses.circle} ${className}`}
+        style={commonStyle}
+        className={`rounded-full flex items-center justify-center shrink-0 text-white select-none ${ringClass} ${sizeClasses.circle} ${className}`}
         title="북마크 일정"
         aria-label="북마크 일정"
       >
@@ -43,7 +56,8 @@ export default function ScheduleTypeIcon({
   if (kind === 'academic') {
     return (
       <span
-        className={`rounded-full flex items-center justify-center shrink-0 bg-[#9A25E2] text-white shadow-2xs select-none ${sizeClasses.circle} ${className}`}
+        style={commonStyle}
+        className={`rounded-full flex items-center justify-center shrink-0 text-white select-none ${ringClass} ${sizeClasses.circle} ${className}`}
         title="학사일정"
         aria-label="학사일정"
       >
@@ -55,7 +69,8 @@ export default function ScheduleTypeIcon({
   // personal
   return (
     <span
-      className={`rounded-full flex items-center justify-center shrink-0 bg-[#52C41A] text-white shadow-2xs select-none ${sizeClasses.circle} ${className}`}
+      style={commonStyle}
+      className={`rounded-full flex items-center justify-center shrink-0 text-white select-none ${ringClass} ${sizeClasses.circle} ${className}`}
       title="개인일정"
       aria-label="개인일정"
     >

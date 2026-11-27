@@ -174,7 +174,7 @@ export default function CalendarGrid({
                         }}
                         title={isMiddleDay ? `[${getScheduleKindLabel(s)}] ${s.title} (진행 중)` : `[${getScheduleKindLabel(s)}] ${s.title}`}
                       >
-                        <ScheduleTypeIcon kind={getScheduleKind(s)} size="xs" />
+                        <ScheduleTypeIcon kind={getScheduleKind(s)} bgColor={badgeColor} size="xs" />
                         <span className="truncate leading-none">
                           {isMiddleDay ? s.title : isEndDay && isMultiDay ? `${s.title} (종료)` : s.title}
                         </span>
