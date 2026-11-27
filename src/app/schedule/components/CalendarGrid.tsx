@@ -147,15 +147,26 @@ export default function CalendarGrid({
                 {cell.dateNumber}
               </span>
 
-              {/* 일정 뱃지 (시작일, 중간 진행일, 종료일 모두 스마트 렌더링) */}
+              {/* 일정 뱃지 (첫일과 마지막 일만 스마트 렌더링) */}
               <div className="w-full flex-1 flex flex-col gap-0.5 overflow-hidden">
                 {hasEvents &&
                   cell.schedules.slice(0, 3).map((s, sIdx) => {
                     const badgeColor = getScheduleColor(s);
-                    const isMultiDay = s.startDate !== s.endDate;
+                    const fixedEndDate = s.endDate && s.endDate >= s.startDate ? s.endDate : s.startDate;
+                    const isMultiDay = s.startDate !== fixedEndDate;
                     const isStartDay = cell.dateStr === s.startDate;
-                    const isEndDay = cell.dateStr === s.endDate;
-                    const isMiddleDay = isMultiDay && !isStartDay && !isEndDay;
+                    const isEndDay = cell.dateStr === fixedEndDate;
+
+                    const titleSuffix = isMultiDay
+                      ? isStartDay
+                        ? ' (시작)'
+                        : isEndDay
+                        ? ' (종료)'
+                        : ''
+                      : '';
+                    const displayTitle = s.title.includes('시작') || s.title.includes('종료')
+                      ? s.title
+                      : `${s.title}${titleSuffix}`;
 
                     return (
                       <div
@@ -164,19 +175,15 @@ export default function CalendarGrid({
                           e.stopPropagation();
                           onSelectSchedule(s);
                         }}
-                        className={`w-full mx-0.5 px-1 py-0.5 text-left flex items-center gap-1 leading-tight cursor-pointer hover:opacity-100 active:scale-95 transition-transform relative z-0 text-white ${
-                          isMiddleDay
-                            ? 'h-4 text-[9.5px] font-medium opacity-85 rounded'
-                            : 'h-4.5 min-h-[18px] text-[10px] font-bold rounded-md opacity-95'
-                        }`}
+                        className="w-full mx-0.5 px-1 py-0.5 text-left flex items-center gap-1 leading-tight cursor-pointer hover:opacity-100 active:scale-95 transition-transform relative z-0 text-white h-4.5 min-h-[18px] text-[10px] font-bold rounded-md opacity-95"
                         style={{
                           backgroundColor: badgeColor,
                         }}
-                        title={isMiddleDay ? `[${getScheduleKindLabel(s)}] ${s.title} (진행 중)` : `[${getScheduleKindLabel(s)}] ${s.title}`}
+                        title={`[${getScheduleKindLabel(s)}] ${displayTitle}`}
                       >
                         <ScheduleTypeIcon kind={getScheduleKind(s)} bgColor={badgeColor} size="xs" />
                         <span className="truncate leading-none">
-                          {isMiddleDay ? s.title : isEndDay && isMultiDay ? `${s.title} (종료)` : s.title}
+                          {displayTitle}
                         </span>
                       </div>
                     );

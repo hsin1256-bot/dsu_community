@@ -113,13 +113,14 @@ export function shiftDateByMonth(dateStr: string, monthDelta: number): string {
 }
 
 // 📅 특정 날짜에 해당하는 일정 필터링
-// (3일 이상 이어지는 긴 일정도 중간 날짜 클릭 시 정상적으로 조회되도록 기간 내 날짜 모두 포함)
+// (캘린더에는 첫일(시작일)과 마지막 일(종료일)만 표시)
 export function filterSchedulesForDate(dateStr: string, schedules: CustomSchedule[]) {
   return schedules.filter((s) => {
-    if (s.startDate === s.endDate) {
+    const fixedEndDate = s.endDate && s.endDate >= s.startDate ? s.endDate : s.startDate;
+    if (s.startDate === fixedEndDate) {
       return dateStr === s.startDate;
     }
-    const fixedEndDate = s.endDate >= s.startDate ? s.endDate : s.startDate;
-    return dateStr >= s.startDate && dateStr <= fixedEndDate;
+    // 첫일과 마지막 일만 일정에 표시
+    return dateStr === s.startDate || dateStr === fixedEndDate;
   });
 }
