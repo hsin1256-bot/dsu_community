@@ -130,7 +130,7 @@ export default function NoticeDetailPage() {
 
   const handleBookmark = () => {
     if (!notice) return;
-    const nextState = toggleNoticeBookmark(notice.id);
+    const nextState = toggleNoticeBookmark(notice);
     setBookmarked(nextState);
   };
 

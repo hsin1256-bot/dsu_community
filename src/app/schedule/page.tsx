@@ -105,6 +105,19 @@ export default function SchedulePage() {
   useEffect(() => {
     setPersonalSchedules(loadPersonalSchedules());
     fetchSchedule();
+
+    const reloadPersonalSchedules = () => {
+      setPersonalSchedules(loadPersonalSchedules());
+    };
+    window.addEventListener('dsu_personal_schedules_updated', reloadPersonalSchedules);
+    window.addEventListener('dsu_bookmarks_updated', reloadPersonalSchedules);
+    window.addEventListener('storage', reloadPersonalSchedules);
+
+    return () => {
+      window.removeEventListener('dsu_personal_schedules_updated', reloadPersonalSchedules);
+      window.removeEventListener('dsu_bookmarks_updated', reloadPersonalSchedules);
+      window.removeEventListener('storage', reloadPersonalSchedules);
+    };
   }, []);
 
   // 현재 선택된 월의 셀 데이터 계산

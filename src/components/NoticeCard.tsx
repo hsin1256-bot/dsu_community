@@ -42,7 +42,7 @@ export default function NoticeCard({ notice }: { notice: Notice }) {
   const handleBookmarkClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const nextState = toggleNoticeBookmark(notice.id);
+    const nextState = toggleNoticeBookmark(notice);
     setBookmarked(nextState);
   };
 

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { X, Calendar, Clock, Edit2, Trash2, BellRing } from 'lucide-react';
+import Link from 'next/link';
+import { X, Calendar, Clock, Edit2, Trash2, BellRing, ExternalLink } from 'lucide-react';
 import { isDdayPinned, toggleDdayPin } from '@/lib/alert-settings';
 import { todayKST, daysBetween } from '@/lib/date-kst';
 import { CustomSchedule } from '../types';
@@ -28,6 +29,9 @@ export default function ScheduleDetailModal({
   if (!schedule) return null;
 
   const isPersonal = schedule.id.startsWith('personal-');
+  const isBookmarkNotice = schedule.id.startsWith('personal-bookmark-');
+  const noticeId = isBookmarkNotice ? schedule.id.replace('personal-bookmark-', '') : null;
+
   // 남은 날짜: 시작 전이면 D-n, 기간 중이면 0(D-Day), 종료 후면 음수
   const today = todayKST();
   const daysToStart = daysBetween(today, schedule.startDate);
@@ -46,7 +50,9 @@ export default function ScheduleDetailModal({
               }}
             />
             <span className="text-xs font-bold text-slate-500">
-              {isPersonal
+              {isBookmarkNotice
+                ? '📌 북마크 공지 일정'
+                : isPersonal
                 ? '개인일정'
                 : `동서대 공식 일정 · ${schedule.category || '학사'}`}
             </span>
@@ -126,6 +132,17 @@ export default function ScheduleDetailModal({
             <span className="text-[11px] font-bold text-amber-800 block mb-1">메모</span>
             <p className="text-slate-700 whitespace-pre-wrap">{schedule.memo}</p>
           </div>
+        )}
+
+        {/* 북마크 공지인 경우 공지사항 바로가기 링크 제공 */}
+        {noticeId && (
+          <Link
+            href={`/notices/${noticeId}`}
+            className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-amber-900 font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 active:scale-98 shadow-2xs"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-amber-700" />
+            공지사항 본문 바로가기
+          </Link>
         )}
 
         {/* 버튼 그룹: 개인 일정에만 수정/삭제 버튼 제공, 학교 공식 일정은 확인(닫기) 버튼만 제공 */}
