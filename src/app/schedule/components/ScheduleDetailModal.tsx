@@ -6,7 +6,7 @@ import { X, Calendar, Clock, Edit2, Trash2, BellRing, ExternalLink } from 'lucid
 import { isDdayPinned, toggleDdayPin } from '@/lib/alert-settings';
 import { todayKST, daysBetween } from '@/lib/date-kst';
 import { CustomSchedule } from '../types';
-import { getScheduleColor } from '../utils';
+import { getScheduleColor, getScheduleEmoji, getScheduleKindLabel } from '../utils';
 
 interface ScheduleDetailModalProps {
   schedule: CustomSchedule | null;
@@ -49,12 +49,15 @@ export default function ScheduleDetailModal({
                 backgroundColor: getScheduleColor(schedule),
               }}
             />
-            <span className="text-xs font-bold text-slate-500">
-              {isBookmarkNotice
-                ? '📌 북마크 공지 일정'
-                : isPersonal
-                ? '개인일정'
-                : `동서대 공식 일정 · ${schedule.category || '학사'}`}
+            <span className="text-xs font-bold text-slate-600 flex items-center gap-1">
+              <span>{getScheduleEmoji(schedule)}</span>
+              <span>
+                {isBookmarkNotice
+                  ? '북마크 일정'
+                  : isPersonal
+                  ? '개인일정'
+                  : `학사일정 · ${schedule.category || '공식'}`}
+              </span>
             </span>
           </div>
           <button
@@ -67,8 +70,9 @@ export default function ScheduleDetailModal({
 
         {/* 일정 제목 */}
         <div>
-          <h3 className="text-base font-extrabold text-slate-900 leading-snug">
-            {schedule.title}
+          <h3 className="text-base font-extrabold text-slate-900 leading-snug flex items-start gap-1.5">
+            <span className="select-none text-base shrink-0">{getScheduleEmoji(schedule)}</span>
+            <span>{schedule.title}</span>
           </h3>
         </div>
 

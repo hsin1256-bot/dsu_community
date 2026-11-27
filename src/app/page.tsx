@@ -81,7 +81,7 @@ export default async function HomePage() {
                       {formatDDay(daysBetween(today, item.startDate))}
                     </span>
                   </div>
-                  <p className="text-xs font-bold text-white mt-1 truncate">{item.title}</p>
+                  <p className="text-xs font-bold text-white mt-1 truncate">🎓 {item.title}</p>
                 </Link>
               ))}
             </div>

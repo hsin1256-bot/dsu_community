@@ -8,12 +8,12 @@ export const MIN_SUPPORTED_YEAR = CURRENT_BASE_YEAR - 1;
 export const MAX_SUPPORTED_YEAR = CURRENT_BASE_YEAR + 2;
 
 export const COLOR_OPTIONS = [
+  '#007AFF', // Blue (북마크 일정)
+  '#8B5CF6', // Purple (학사일정)
+  '#22C55E', // Green (개인일정)
   '#FF3B30', // Red
   '#FF9500', // Orange
   '#FFCC00', // Yellow
-  '#34C759', // Green
-  '#007AFF', // Blue
-  '#5856D6', // Purple
   '#AF52DE', // Violet
   '#9E1B32', // Dongseo Burgundy
 ];

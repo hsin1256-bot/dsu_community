@@ -1,29 +1,70 @@
 import { CustomSchedule } from './types';
 
-// 🎨 동일한 일정끼리 헷갈리지 않게 고유 색상을 매칭하는 컬러 팔레트 & 헬퍼 함수
+// 🎨 일정 유형 분류: 북마크 일정, 학사일정, 개인일정
+export type ScheduleKind = 'bookmark' | 'academic' | 'personal';
+
+export function getScheduleKind(schedule: CustomSchedule): ScheduleKind {
+  if (schedule.id.startsWith('personal-bookmark-') || schedule.category === '공지 북마크') {
+    return 'bookmark';
+  }
+  if (schedule.id.startsWith('personal-')) {
+    return 'personal';
+  }
+  return 'academic';
+}
+
+/**
+ * 🏷️ 일정 종류별 이모티콘 매핑
+ * - 북마크 일정: 🔖 (Bookmark Ribbon)
+ * - 학사일정: 🎓 (Graduation Cap)
+ * - 개인일정: 👤 (Person Profile)
+ */
+export function getScheduleEmoji(schedule: CustomSchedule): string {
+  const kind = getScheduleKind(schedule);
+  switch (kind) {
+    case 'bookmark':
+      return '🔖';
+    case 'academic':
+      return '🎓';
+    case 'personal':
+      return '👤';
+  }
+}
+
+export function getScheduleKindLabel(schedule: CustomSchedule): string {
+  const kind = getScheduleKind(schedule);
+  switch (kind) {
+    case 'bookmark':
+      return '북마크 일정';
+    case 'academic':
+      return '학사일정';
+    case 'personal':
+      return '개인일정';
+  }
+}
+
+// 🎨 유형별 기본 테마 컬러 (업로드된 디자인 기준: 북마크-파랑, 학사-보라, 개인-초록)
+export const KIND_THEME_COLORS = {
+  bookmark: '#007AFF', // 파란색 (북마크 일정)
+  academic: '#8B5CF6', // 보라색 (학사일정)
+  personal: '#22C55E', // 초록색 (개인일정)
+};
+
 export const SCHEDULE_COLOR_PALETTE = [
-  '#9E1B32', // Dongseo Burgundy
   '#007AFF', // Blue
-  '#34C759', // Green
+  '#8B5CF6', // Purple
+  '#22C55E', // Green
+  '#9E1B32', // Dongseo Burgundy
   '#FF9500', // Orange
-  '#5856D6', // Indigo / Purple
-  '#AF52DE', // Violet
   '#00C7BE', // Teal
   '#FF2D55', // Pink
   '#5AC8FA', // Sky Blue
-  '#E056FD', // Orchid
 ];
 
 export function getScheduleColor(schedule: CustomSchedule): string {
   if (schedule.color) return schedule.color;
-  // 제목 기반 해시 코드로 동일한 일정은 캘린더 전체에서 동일한 고유 색상 유지
-  let hash = 0;
-  for (let i = 0; i < schedule.title.length; i++) {
-    hash = (hash << 5) - hash + schedule.title.charCodeAt(i);
-    hash |= 0;
-  }
-  const colorIndex = Math.abs(hash) % SCHEDULE_COLOR_PALETTE.length;
-  return SCHEDULE_COLOR_PALETTE[colorIndex];
+  const kind = getScheduleKind(schedule);
+  return KIND_THEME_COLORS[kind];
 }
 
 // "13:00" -> { ampm: '오후', hour: 1, minute: '00' }
