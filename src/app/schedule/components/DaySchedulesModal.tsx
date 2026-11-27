@@ -27,6 +27,16 @@ export default function DaySchedulesModal({
 
   const formattedDate = formatKoreanDateWithWeekday(dateStr);
 
+  const bookmarkList = schedules.filter((s) => getScheduleKind(s) === 'bookmark');
+  const academicList = schedules.filter((s) => getScheduleKind(s) === 'academic');
+  const personalList = schedules.filter((s) => getScheduleKind(s) === 'personal');
+
+  const sections = [
+    { kind: 'bookmark' as const, label: '북마크 일정', list: bookmarkList, color: '#0080FF' },
+    { kind: 'academic' as const, label: '학사일정', list: academicList, color: '#9A25E2' },
+    { kind: 'personal' as const, label: '개인일정', list: personalList, color: '#52C41A' },
+  ].filter((sec) => sec.list.length > 0);
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white w-full max-w-[380px] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
@@ -51,74 +61,88 @@ export default function DaySchedulesModal({
           </button>
         </div>
 
-        {/* 일정 리스트 (스크롤 가능) */}
-        <div className="p-4 space-y-2.5 overflow-y-auto flex-1 divide-y divide-slate-100/80">
-          {schedules.map((s, idx) => {
-            const badgeColor = getScheduleColor(s);
-            const fixedEndDate = s.endDate && s.endDate >= s.startDate ? s.endDate : s.startDate;
-            const isMultiDay = s.startDate !== fixedEndDate;
-            const isStartDay = dateStr === s.startDate;
-            const isEndDay = dateStr === fixedEndDate;
-            const titleSuffix = isMultiDay
-              ? isStartDay
-                ? ' (시작)'
-                : isEndDay
-                ? ' (종료)'
-                : ''
-              : '';
-            const displayTitle = s.title.includes('시작') || s.title.includes('종료')
-              ? s.title
-              : `${s.title}${titleSuffix}`;
-            const kind = getScheduleKind(s);
-            const kindLabel = getScheduleKindLabel(s);
-            const isBookmarkNotice = s.id.startsWith('personal-bookmark-');
-
-            return (
-              <div
-                key={s.id || idx}
-                onClick={() => {
-                  onClose();
-                  onSelectSchedule(s);
-                }}
-                className="pt-2.5 first:pt-0 cursor-pointer group"
-              >
-                <div className="p-3 rounded-2xl bg-slate-50/80 hover:bg-slate-100/90 border border-slate-100 transition flex items-center justify-between gap-3 active:scale-98">
-                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                    <ScheduleTypeIcon kind={kind} bgColor={badgeColor} size="sm" className="mt-0.5 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span
-                          className="text-[10px] font-bold px-1.5 py-0.2 rounded-md text-white"
-                          style={{ backgroundColor: badgeColor }}
-                        >
-                          {kindLabel}
-                        </span>
-                        {isBookmarkNotice && (
-                          <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded">
-                            공지
-                          </span>
-                        )}
-                        <span className="text-[11px] text-slate-400 font-medium truncate">
-                          {s.isAllDay || (!s.startTime && !s.endTime)
-                            ? '하루 종일'
-                            : `${s.startTime || '00:00'} ~ ${s.endTime || '00:00'}`}
-                        </span>
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-900 group-hover:text-dongseo-700 transition leading-snug break-keep">
-                        {displayTitle}
-                      </h4>
-                      {isMultiDay && (
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          기간: {s.startDate} ~ {fixedEndDate}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600 transition shrink-0" />
+        {/* 일정 리스트 (북마크, 학사, 개인 일정 카테고리별 분류) */}
+        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+          {sections.map((sec) => (
+            <div key={sec.kind} className="space-y-2">
+              {/* 카테고리 분류 헤더 및 개수 표시 */}
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-1.5">
+                  <ScheduleTypeIcon kind={sec.kind} bgColor={sec.color} size="sm" />
+                  <span className="text-xs font-black text-slate-800">{sec.label}</span>
+                  <span
+                    className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full text-white leading-none shadow-2xs"
+                    style={{ backgroundColor: sec.color }}
+                  >
+                    {sec.list.length}개
+                  </span>
                 </div>
               </div>
-            );
-          })}
+
+              {/* 해당 카테고리 일정 카드 목록 */}
+              <div className="space-y-1.5">
+                {sec.list.map((s, idx) => {
+                  const badgeColor = getScheduleColor(s);
+                  const fixedEndDate = s.endDate && s.endDate >= s.startDate ? s.endDate : s.startDate;
+                  const isMultiDay = s.startDate !== fixedEndDate;
+                  const isStartDay = dateStr === s.startDate;
+                  const isEndDay = dateStr === fixedEndDate;
+                  const titleSuffix = isMultiDay
+                    ? isStartDay
+                      ? ' (시작)'
+                      : isEndDay
+                      ? ' (종료)'
+                      : ''
+                    : '';
+                  const displayTitle = s.title.includes('시작') || s.title.includes('종료')
+                    ? s.title
+                    : `${s.title}${titleSuffix}`;
+                  const isBookmarkNotice = s.id.startsWith('personal-bookmark-');
+
+                  return (
+                    <div
+                      key={s.id || idx}
+                      onClick={() => {
+                        onClose();
+                        onSelectSchedule(s);
+                      }}
+                      className="cursor-pointer group p-2.5 rounded-2xl bg-slate-50/90 hover:bg-slate-100 border border-slate-100 transition flex items-center justify-between gap-2.5 active:scale-98"
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                        <div
+                          className="w-1.5 self-stretch rounded-full shrink-0"
+                          style={{ backgroundColor: badgeColor }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            {isBookmarkNotice && (
+                              <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded">
+                                공지
+                              </span>
+                            )}
+                            <span className="text-[11px] text-slate-500 font-medium truncate">
+                              {s.isAllDay || (!s.startTime && !s.endTime)
+                                ? '하루 종일'
+                                : `${s.startTime || '00:00'} ~ ${s.endTime || '00:00'}`}
+                            </span>
+                          </div>
+                          <h4 className="text-xs font-bold text-slate-900 group-hover:text-dongseo-700 transition leading-snug break-keep">
+                            {displayTitle}
+                          </h4>
+                          {isMultiDay && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              기간: {s.startDate} ~ {fixedEndDate}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600 transition shrink-0" />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* 하단 버튼 */}
