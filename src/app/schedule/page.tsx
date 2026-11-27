@@ -14,6 +14,7 @@ import CalendarGrid from './components/CalendarGrid';
 import MonthPickerModal from './components/MonthPickerModal';
 import AddScheduleModal from './components/AddScheduleModal';
 import ScheduleDetailModal from './components/ScheduleDetailModal';
+import DaySchedulesModal from './components/DaySchedulesModal';
 
 const PERSONAL_STORAGE_KEY = 'dsu_personal_schedules';
 
@@ -67,6 +68,26 @@ export default function SchedulePage() {
 
   // 🔍 클릭한 일정 상세 보기 모달 상태
   const [selectedScheduleDetail, setSelectedScheduleDetail] = useState<CustomSchedule | null>(null);
+
+  // 📋 특정 날짜 전체 일정 모달 상태 (+더보기 클릭 시)
+  const [daySchedulesModalData, setDaySchedulesModalData] = useState<{
+    isOpen: boolean;
+    dateStr: string;
+    schedules: CustomSchedule[];
+  }>({
+    isOpen: false,
+    dateStr: '',
+    schedules: [],
+  });
+
+  const handleOpenDaySchedules = (dateStr: string, cellSchedules: CustomSchedule[]) => {
+    setSelectedDateStr(dateStr);
+    setDaySchedulesModalData({
+      isOpen: true,
+      dateStr,
+      schedules: cellSchedules,
+    });
+  };
 
   const showToast = (message: string) => {
     setSyncToast(message);
@@ -331,6 +352,7 @@ export default function SchedulePage() {
               maxYear={MAX_SUPPORTED_YEAR}
               onSelectDate={setSelectedDateStr}
               onSelectSchedule={setSelectedScheduleDetail}
+              onOpenDaySchedules={handleOpenDaySchedules}
               onPrevMonth={() => {
                 if (currentMonth === 0) {
                   if (currentYear > MIN_SUPPORTED_YEAR) {
@@ -384,6 +406,19 @@ export default function SchedulePage() {
         onClose={() => setSelectedScheduleDetail(null)}
         onOpenEdit={handleOpenEditModal}
         onDelete={handleDeleteSchedule}
+      />
+
+      {/* 📋 특정 날짜 전체 일정 모달 (+더보기 클릭 시) */}
+      <DaySchedulesModal
+        isOpen={daySchedulesModalData.isOpen}
+        onClose={() => setDaySchedulesModalData((prev) => ({ ...prev, isOpen: false }))}
+        dateStr={daySchedulesModalData.dateStr}
+        schedules={daySchedulesModalData.schedules}
+        onSelectSchedule={setSelectedScheduleDetail}
+        onOpenAddModal={(dateStr) => {
+          setSelectedDateStr(dateStr);
+          handleOpenAddModal();
+        }}
       />
     </main>
   );

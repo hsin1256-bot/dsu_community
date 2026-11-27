@@ -15,6 +15,7 @@ interface CalendarGridProps {
   maxYear: number;
   onSelectDate: (dateStr: string) => void;
   onSelectSchedule: (schedule: CustomSchedule) => void;
+  onOpenDaySchedules: (dateStr: string, schedules: CustomSchedule[]) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onOpenMonthPicker: () => void;
@@ -29,6 +30,7 @@ export default function CalendarGrid({
   maxYear,
   onSelectDate,
   onSelectSchedule,
+  onOpenDaySchedules,
   onPrevMonth,
   onNextMonth,
   onOpenMonthPicker,
@@ -189,13 +191,22 @@ export default function CalendarGrid({
                     );
                   })}
                 {cell.schedules.length > 3 && (
-                  <span
-                    className={`text-[8px] font-extrabold text-left px-1 ${
-                      isSelected ? 'text-white' : 'text-dongseo-700'
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenDaySchedules(cell.dateStr, cell.schedules);
+                    }}
+                    className={`w-full text-[8.5px] font-extrabold text-left px-1 py-0.5 mt-0.5 rounded transition flex items-center justify-between group active:scale-95 shadow-2xs cursor-pointer ${
+                      isSelected
+                        ? 'text-dongseo-800 bg-white/90 hover:bg-white'
+                        : 'text-dongseo-700 bg-dongseo-50 hover:bg-dongseo-100 hover:text-dongseo-800'
                     }`}
+                    title="전체 일정 보기"
                   >
-                    +{cell.schedules.length - 3}개 더보기
-                  </span>
+                    <span>+{cell.schedules.length - 3}개 더보기</span>
+                    <ChevronRight className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition" />
+                  </button>
                 )}
               </div>
             </button>

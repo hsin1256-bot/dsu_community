@@ -96,6 +96,14 @@ export function formatKoreanDateDisplay(dateStr: string) {
   return `${y}. ${parseInt(m, 10)}. ${parseInt(d, 10)}.`;
 }
 
+export function formatKoreanDateWithWeekday(dateStr: string) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+  const dayName = weekdays[date.getDay()];
+  return `${y}년 ${m}월 ${d}일 (${dayName})`;
+}
+
 export function formatDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
