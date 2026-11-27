@@ -64,7 +64,7 @@ export default function ScheduleDetailModal({
         {/* 일정 제목 */}
         <div>
           <h3 className="text-base font-extrabold text-slate-900 leading-snug flex items-start gap-2">
-            <ScheduleTypeIcon kind={getScheduleKind(schedule)} bgColor={getScheduleColor(schedule)} size="sm" className="mt-0.5" />
+            <ScheduleTypeIcon kind={getScheduleKind(schedule)} bgColor={getScheduleColor(schedule)} size="md" className="mt-0.5" />
             <span>{schedule.title}</span>
           </h3>
         </div>

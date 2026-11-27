@@ -25,10 +25,10 @@ export default function ScheduleTypeIcon({
   className = '',
 }: ScheduleTypeIconProps) {
   const sizeClasses = {
-    xs: { circle: 'w-3 h-3', icon: 'w-1.5 h-1.5' },
-    sm: { circle: 'w-4 h-4', icon: 'w-2.5 h-2.5' },
-    md: { circle: 'w-5 h-5', icon: 'w-3 h-3' },
-    lg: { circle: 'w-7 h-7', icon: 'w-4 h-4' },
+    xs: { circle: 'w-3.5 h-3.5 min-w-[14px]', icon: 'w-2.5 h-2.5' },
+    sm: { circle: 'w-5 h-5 min-w-[20px]', icon: 'w-3 h-3' },
+    md: { circle: 'w-6 h-6 min-w-[24px]', icon: 'w-3.5 h-3.5' },
+    lg: { circle: 'w-8 h-8 min-w-[32px]', icon: 'w-5 h-5' },
   }[size];
 
   // 지정된 bgColor 가 있으면 해당 일정의 색상을 그대로 사용, 없으면 유형 기본 테마색 사용

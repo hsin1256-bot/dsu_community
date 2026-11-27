@@ -83,8 +83,8 @@ export default async function HomePage() {
                     </span>
                   </div>
                   <p className="text-xs font-bold text-white mt-1 truncate flex items-center gap-1.5">
-                    <span className="w-3.5 h-3.5 rounded-full bg-[#9A25E2] flex items-center justify-center shrink-0 shadow-2xs">
-                      <GraduationCap className="w-2 h-2 fill-white stroke-white stroke-[2]" />
+                    <span className="w-4 h-4 rounded-full bg-[#9A25E2] flex items-center justify-center shrink-0 shadow-2xs ring-1 ring-white/30">
+                      <GraduationCap className="w-2.5 h-2.5 fill-white stroke-white stroke-[2]" />
                     </span>
                     <span className="truncate">{item.title}</span>
                   </p>

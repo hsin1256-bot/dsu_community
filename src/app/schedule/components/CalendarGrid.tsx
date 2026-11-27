@@ -166,8 +166,8 @@ export default function CalendarGrid({
                         }}
                         className={`w-full mx-0.5 px-1 py-0.5 text-left flex items-center gap-1 leading-tight cursor-pointer hover:opacity-100 active:scale-95 transition-transform relative z-0 text-white ${
                           isMiddleDay
-                            ? 'h-3.5 text-[9px] font-medium opacity-85 rounded'
-                            : 'h-4 text-[10px] font-bold rounded-md opacity-95'
+                            ? 'h-4 text-[9.5px] font-medium opacity-85 rounded'
+                            : 'h-4.5 min-h-[18px] text-[10px] font-bold rounded-md opacity-95'
                         }`}
                         style={{
                           backgroundColor: badgeColor,
