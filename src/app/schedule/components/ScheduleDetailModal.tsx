@@ -135,6 +135,7 @@ export default function ScheduleDetailModal({
         {noticeId && (
           <Link
             href={`/notices/${noticeId}`}
+            onClick={onClose}
             className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-amber-900 font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 active:scale-98 shadow-2xs"
           >
             <ExternalLink className="w-3.5 h-3.5 text-amber-700" />
